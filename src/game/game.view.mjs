@@ -48,6 +48,36 @@ function markSvg(colorIdx, size) {
 const spriteSrc = (species, pose, colorIdx) =>
   `/art/sprites/${species}-${pose}-${COLORS[colorIdx].key}.png`
 
+// Sprite height in STAGE UNITS, so the animals are the same size on every
+// device. Width follows from the baked frame's own aspect — both poses of a
+// species come out of the bake on one canvas, so there is exactly one aspect
+// per species and swapping frames cannot change the silhouette's footprint.
+const SPRITE_H = { cat: 62, unicorn: 70 }
+
+// How far the animal travels, in stage units, per half-step. This is what makes
+// the cadence come out right at every speed: swapping on DISTANCE rather than
+// on a timer means a slow round-one cat plods and a round-twelve one trots,
+// with no second number to tune. A timer would have them all moonwalking at
+// the top of the ladder.
+const STRIDE = 40
+
+// Both frames of every sprite, decoded before the first one is needed. Two
+// photographs alternating is only a walk cycle if the second one is already in
+// memory; fetched on demand, the first swap of each animal is a blank frame.
+const preloaded = []
+function preload() {
+  if (preloaded.length) return
+  for (const species of ["cat", "unicorn"]) {
+    for (const pose of ["a", "b"]) {
+      for (let c = 0; c < COLORS.length; c++) {
+        const im = new Image()
+        im.src = spriteSrc(species, pose, c)
+        preloaded.push(im)
+      }
+    }
+  }
+}
+
 const css = `
 .po { position:absolute; inset:0; display:flex; flex-direction:column; overflow:hidden; }
 
@@ -341,7 +371,7 @@ export default {
     function makeEl(sp) {
       const el = document.createElement("img")
       el.className = "po-a"
-      el.src = spriteSrc(sp.species, sp.i % 2 ? "b" : "a", sp.color)
+      el.src = spriteSrc(sp.species, "a", sp.color)
       el.alt = ""
       el.onerror = () => {
         // Art is allowed to be missing. The game is the same game with
@@ -350,6 +380,7 @@ export default {
         const d = document.createElement("div")
         d.className = el.className
         d.style.cssText = el.style.cssText
+        d.style.width = (SPRITE_H[sp.species] * 1.3) + "px"
         d.style.background = COLORS[sp.color].hex
         d.style.borderRadius = sp.species === "cat" ? "34% 34% 26% 26%" : "46% 20% 26% 26%"
         d.style.border = "2px solid rgba(0,0,0,.55)"
@@ -377,7 +408,7 @@ export default {
         if (clock >= sp.t && !live.some((a) => a.sp.i === sp.i) && !isDone(sp.i)) {
           const el = makeEl(sp)
           field.append(el)
-          live.push({ sp, el, x: 0, y: laneY(sp.lane, h) })
+          live.push({ sp, el, x: 0, y: laneY(sp.lane, h), foot: 0, wUnits: 0 })
         }
       }
 
@@ -388,9 +419,28 @@ export default {
           : STAGE_W + CONF.spriteW - (a.sp.speed * dt2) / 1000
         a.x = u
         const px = u * scale
-        const size = (a.sp.species === "unicorn" ? 76 : 68) * scale
-        a.el.style.width = size + "px"
-        const tf = `translate3d(${px}px, ${a.y - size / 2}px, 0) scaleX(${a.sp.dir === 1 ? 1 : -1})`
+        const hpx = SPRITE_H[a.sp.species] * scale
+        a.el.style.height = hpx + "px"
+        if (!a.wUnits && a.el.naturalWidth) {
+          a.wUnits = SPRITE_H[a.sp.species] * (a.el.naturalWidth / a.el.naturalHeight)
+        }
+
+        // The walk. Phase advances with distance covered, so cadence tracks
+        // speed on its own. The frame swap does the legs; the rotation and the
+        // rise do the weight — at this size the body carrying itself over each
+        // step is doing more of the work than the legs are.
+        const travelled = (a.sp.speed * dt2) / 1000
+        const phase = travelled / STRIDE
+        const foot = Math.floor(phase) % 2
+        if (foot !== a.foot) {
+          a.foot = foot
+          a.el.src = spriteSrc(a.sp.species, foot ? "b" : "a", a.sp.color)
+        }
+        const rise = Math.abs(Math.sin(phase * Math.PI)) * 2.6 * scale
+        const rot = Math.sin(phase * Math.PI * 2) * 2.4
+
+        const tf = `translate3d(${px}px, ${a.y - hpx / 2 - rise}px, 0)`
+          + ` scaleX(${a.sp.dir === 1 ? 1 : -1}) rotate(${a.sp.dir === 1 ? rot : -rot}deg)`
         a.el.style.setProperty("--tf", tf)
         a.el.style.transform = tf
         if (dt2 >= a.sp.cross) resolve(a, "exit")
@@ -413,8 +463,9 @@ export default {
       const out = step(acc, sched(), a.sp, kind)
       if (kind === "tap") taps.push([a.sp.i, Math.round(clock)])
 
-      const size = (a.sp.species === "unicorn" ? 76 : 68) * scale
-      const cx = a.x * scale + size / 2, cy = a.y
+      const size = SPRITE_H[a.sp.species] * scale
+      const wpx = (a.wUnits || SPRITE_H[a.sp.species] * 1.3) * scale
+      const cx = a.x * scale + wpx / 2, cy = a.y
 
       if (out === "pop") {
         a.el.classList.add("pop")
@@ -447,8 +498,13 @@ export default {
     function ghost(a, cx, cy, size) {
       const g = a.el.cloneNode(true)
       g.className = "po-ghost"
-      g.style.width = size + "px"
-      const edge = a.sp.dir === 1 ? field.clientWidth - size : 0
+      // Sized by HEIGHT like everything else since the walk cycle landed — a
+      // clone carrying an inline height and a width fights itself and the ghost
+      // comes out squashed, which is a poor last look at the animal you missed.
+      g.style.height = size + "px"
+      g.style.width = "auto"
+      const wpx = (a.wUnits || size * 1.3) * scale
+      const edge = a.sp.dir === 1 ? field.clientWidth - wpx : 0
       g.style.transform = `translate3d(${edge}px, ${cy - size / 2}px, 0) scaleX(${a.sp.dir === 1 ? 1 : -1})`
       field.append(g)
       deadEls.push(g)
@@ -499,10 +555,11 @@ export default {
       let best = null, bestD = Infinity
       for (const a of live) {
         if (a.done) continue
-        const size = (a.sp.species === "unicorn" ? 76 : 68) * scale
-        const cx = a.x * scale + size / 2, cy = a.y
-        if (Math.abs(px - cx) > size / 2 + pad) continue
-        if (Math.abs(py - cy) > size / 2 + pad) continue
+        const hpx = SPRITE_H[a.sp.species] * scale
+        const wpx = (a.wUnits || SPRITE_H[a.sp.species] * 1.3) * scale
+        const cx = a.x * scale + wpx / 2, cy = a.y
+        if (Math.abs(px - cx) > wpx / 2 + pad) continue
+        if (Math.abs(py - cy) > hpx / 2 + pad) continue
         const d = (px - cx) ** 2 + (py - cy) ** 2
         if (d < bestD) { bestD = d; best = a }
       }
@@ -552,6 +609,7 @@ export default {
       setTimeout(() => showBanner(), 900)
     }
 
+    preload()
     drawHud()
     showBanner()
 

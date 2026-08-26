@@ -206,6 +206,58 @@ const ok = (name, cond, extra = "") => {
   }
 }
 
+// --- the walk cycle is only a walk cycle if the frames are registered --------
+//
+// The two poses of each species are two separate photographs. Alternating them
+// reads as legs only while they share a baseline and a centre; drift a few
+// pixels and the animal stops walking and starts twitching. That is invisible
+// in a still and obvious in motion, which is the worst combination, so it is
+// asserted on the baked files rather than eyeballed.
+{
+  const { readPNG } = await import("../src/server/png.mjs")
+  const { readFile } = await import("node:fs/promises")
+  const measure = (img) => {
+    const { w, h, rgba } = img
+    let y1 = -1, area = 0, sx = 0
+    for (let y = 0; y < h; y++) for (let x = 0; x < w; x++) {
+      if (rgba[(y * w + x) * 4 + 3] < 40) continue
+      area++; sx += x; if (y > y1) y1 = y
+    }
+    return { baseline: y1, cx: sx / Math.max(1, area), area }
+  }
+  for (const species of ["cat", "unicorn"]) {
+    const files = ["a", "b"].map((p) => `public/art/sprites/${species}-${p}-grey.png`)
+    const bufs = await Promise.all(files.map((f) => readFile(f).catch(() => null)))
+    if (bufs.some((b) => !b)) { ok(`${species} frames are baked`, false, "run node tools/bake.mjs"); continue }
+    const [a, b] = bufs.map((buf) => readPNG(buf))
+    ok(`${species} frames share a canvas`, a.w === b.w && a.h === b.h, `${a.w}x${a.h} vs ${b.w}x${b.h}`)
+    const [ma, mb] = [measure(a), measure(b)]
+    ok(`${species} frames share a baseline`, Math.abs(ma.baseline - mb.baseline) <= 1,
+       `${ma.baseline} vs ${mb.baseline}`)
+    ok(`${species} frames share a centre`, Math.abs(ma.cx - mb.cx) <= 2,
+       `${ma.cx.toFixed(1)} vs ${mb.cx.toFixed(1)}`)
+    ok(`${species} frames are the same size animal`, Math.abs(ma.area / mb.area - 1) <= 0.06,
+       `area ratio ${(ma.area / mb.area).toFixed(3)}`)
+  }
+}
+
+// The swap has to happen at the FOOTFALL. The body's rise and lean are
+// continuous functions of the same phase the frame index is taken from, so the
+// only discontinuity in the whole cycle is the frame change — and it has to land
+// at the instant the body is lowest and level, or the animal changes shape and
+// height in the same tick and the eye reads it as a glitch.
+{
+  const rise = (phase) => Math.abs(Math.sin(phase * Math.PI))
+  const lean = (phase) => Math.sin(phase * Math.PI * 2)
+  let worst = 0
+  for (let k = 1; k <= 12; k++) {
+    worst = Math.max(worst, Math.abs(rise(k)), Math.abs(lean(k)))
+  }
+  ok("the frame swaps at the footfall, with the body level", worst < 1e-9, String(worst))
+  // ...and the body is genuinely moving in between, or this is a slideshow.
+  ok("the body actually rises between footfalls", rise(0.5) > 0.99)
+}
+
 // --- config sanity ----------------------------------------------------------
 {
   ok("config declares an epoch", /^\d{4}-\d{2}-\d{2}$/.test(config.epoch))
