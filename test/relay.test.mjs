@@ -258,6 +258,27 @@ const ok = (name, cond, extra = "") => {
   ok("the body actually rises between footfalls", rise(0.5) > 0.99)
 }
 
+// --- the things a link needs before anyone has played -----------------------
+//
+// All four of these shipped broken and none of them throws: the icon 404s, the
+// installed app is called "Relay", and the unfurl plate that the card renderer
+// already supports is simply absent. Nothing in a running game notices.
+{
+  const { readFile, stat } = await import("node:fs/promises")
+  const exists = async (f) => !!(await stat(f).catch(() => null))
+
+  ok("the apple-touch/PWA icon exists", await exists("public/icon.png"),
+     "referenced by index.html and the manifest; run node tools/brand.mjs")
+  ok("the unfurl plate exists", await exists(`themes/${config.theme}/card.png`),
+     "renderCard takes an art plate and was being handed nothing")
+
+  const man = JSON.parse(await readFile("public/manifest.webmanifest", "utf8"))
+  ok("the manifest is this game, not the template", man.name === config.title, man.name)
+  ok("the manifest icons all exist",
+     (await Promise.all(man.icons.map((i) => exists("public" + i.src)))).every(Boolean),
+     man.icons.map((i) => i.src).join(" "))
+}
+
 // --- config sanity ----------------------------------------------------------
 {
   ok("config declares an epoch", /^\d{4}-\d{2}-\d{2}$/.test(config.epoch))

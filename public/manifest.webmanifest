@@ -1,9 +1,23 @@
 {
-  "name": "Relay",
-  "short_name": "Relay",
+  "name": "PAWS OFF",
+  "short_name": "PAWS OFF",
+  "description": "Tap all but two. A new pair to leave alone every round.",
   "start_url": "/",
   "display": "standalone",
+  "orientation": "portrait",
   "background_color": "#f2e6cf",
-  "theme_color": "#f2e6cf",
-  "icons": [{ "src": "/icon.png", "sizes": "512x512", "type": "image/png" }]
+  "theme_color": "#b8281c",
+  "icons": [
+    {
+      "src": "/icon.png",
+      "sizes": "512x512",
+      "type": "image/png",
+      "purpose": "any"
+    },
+    {
+      "src": "/icon.svg",
+      "sizes": "any",
+      "type": "image/svg+xml"
+    }
+  ]
 }

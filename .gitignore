@@ -17,3 +17,4 @@ art/baked.png
 # live card grabs, refetched whenever the card changes
 art/card-*live.png
 art/cards.png
+art/preview-*.png
