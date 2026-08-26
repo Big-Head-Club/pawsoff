@@ -40,25 +40,41 @@ export function key(img, opts = {}) {
   const lo = opts.lo ?? Math.max(12, Math.round(edgeLo * 0.45))
   const hi = opts.hi ?? Math.max(lo + 10, Math.round(edgeLo * 0.85))
 
+  // HYSTERESIS, the way an edge detector does it. Midjourney vignettes: the
+  // corners of the backdrop are dark enough that a single threshold strict
+  // enough to spare a pale grey animal cannot reach them, and the cutout comes
+  // back with a crescent of wall still attached. So flood at the STRONG
+  // threshold to seed, then grow that region into anything merely magenta-ish.
+  // A weak pixel only becomes background if it is CONNECTED to a strong one,
+  // which is what keeps the same relaxed threshold from eating the subject.
+  const weak = opts.weak ?? Math.max(5, Math.round(lo * 0.34))
   const bg = new Uint8Array(w * h)
   const stack = []
-  const push = (x, y) => {
+  const push = (x, y, thr) => {
     if (x < 0 || y < 0 || x >= w || y >= h) return
     const i = y * w + x
-    if (bg[i] || mag[i] < lo) return
+    if (bg[i] || mag[i] < thr) return
     bg[i] = 1; stack.push(i)
   }
-  for (let x = 0; x < w; x++) { push(x, 0); push(x, h - 1) }
-  for (let y = 0; y < h; y++) { push(0, y); push(w - 1, y) }
+  for (let x = 0; x < w; x++) { push(x, 0, lo); push(x, h - 1, lo) }
+  for (let y = 0; y < h; y++) { push(0, y, lo); push(w - 1, y, lo) }
   while (stack.length) {
     const i = stack.pop()
     const x = i % w, y = (i / w) | 0
-    push(x + 1, y); push(x - 1, y); push(x, y + 1); push(x, y - 1)
+    push(x + 1, y, weak); push(x - 1, y, weak); push(x, y + 1, weak); push(x, y - 1, weak)
   }
 
+  // Reaching a pixel by flooding is already proof it is background, so the only
+  // thing the ramp is for is the RIM — pixels that are part animal, part wall.
+  // Ramping between `lo` and `hi` instead left a vignetted corner sitting at 30%
+  // alpha, which composited as a dark crescent of wall behind every sprite: the
+  // corner was dimmer than the backdrop the thresholds were sampled from, so it
+  // read as "partly subject". Anything the flood touched that still looks
+  // magenta at all is gone; only a pixel down at the neutral end keeps opacity.
+  const ramp = Math.max(5, lo * 0.7)
   const alpha = new Float32Array(w * h)
   for (let i = 0; i < w * h; i++) {
-    alpha[i] = bg[i] ? Math.max(0, Math.min(1, 1 - (mag[i] - lo) / (hi - lo))) : 1
+    alpha[i] = bg[i] ? Math.max(0, Math.min(1, 1 - mag[i] / ramp)) : 1
   }
 
   // Keep only the biggest blob of subject. A soft-lit felt toy leaves a halo of

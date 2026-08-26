@@ -87,9 +87,29 @@ function outline(img, px, mix) {
   return { w, h, rgba: out }
 }
 
-export function tint(src0, hex, mark, { markAlpha = 0.42, tilesAcross = TILES_ACROSS, edge = 0 } = {}) {
+// A base shot on a magenta screen is never actually neutral — enough magenta
+// bounces off the wool that the "undyed grey" comes back pink, and a multiply
+// through a pink base drags every colour warm: the blue cat lands on purple and
+// the green one on olive. Pull each pixel toward its own luminance first, so the
+// only hue in the output is the hue that was asked for. A little chroma is left
+// behind on purpose — it is what keeps the fibre from flattening to grey mush.
+function neutralise(img, amount) {
+  const { w, h, rgba } = img
+  const out = Buffer.from(rgba)
+  for (let i = 0; i < w * h; i++) {
+    const r = rgba[i * 4], g = rgba[i * 4 + 1], b = rgba[i * 4 + 2]
+    const l = 0.2126 * r + 0.7152 * g + 0.0722 * b
+    out[i * 4] = Math.round(r + (l - r) * amount)
+    out[i * 4 + 1] = Math.round(g + (l - g) * amount)
+    out[i * 4 + 2] = Math.round(b + (l - b) * amount)
+  }
+  return { w, h, rgba: out }
+}
+
+export function tint(src0, hex, mark, { markAlpha = 0.42, tilesAcross = TILES_ACROSS, edge = 0, neutral = 0.9 } = {}) {
   const [cr, cg, cb] = hexToRgb(hex)
-  const img = edge ? outline(src0, edge, 0.34) : src0
+  const flat = neutral ? neutralise(src0, neutral) : src0
+  const img = edge ? outline(flat, edge, 0.34) : flat
   const { w, h, rgba } = img
   const out = Buffer.from(rgba)
   const tile = Math.max(6, Math.round(h / tilesAcross))

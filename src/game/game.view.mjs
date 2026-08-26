@@ -256,12 +256,17 @@ export default {
 
     // --- play --------------------------------------------------------------
     function startPlay() {
-      phase = "playing"
       clock = 0
       last = performance.now()
       taps = []
       live = []
       acc = { lives: acc.lives, combo: acc.combo, gained: 0, lost: 0 }
+      // A round must not begin on a screen nobody is looking at. `setTimeout`
+      // still fires in a backgrounded tab but rAF does not, so a banner that
+      // times out while the tab is hidden would otherwise start a round that
+      // cannot advance — and then resume mid-way when the player comes back.
+      if (document.hidden) { phase = "paused"; return }
+      phase = "playing"
       raf = requestAnimationFrame(tick)
     }
 
