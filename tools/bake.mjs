@@ -21,10 +21,10 @@ import { COLORS } from "../src/game/game.rules.mjs"
 // animals walking the other way. A base that faces left is flipped here rather
 // than in CSS, so "which way is this sprite facing" is never a runtime question.
 const SET = [
-  { out: "cat-a",     src: "art/probes/sc2_1.png",       flip: false, h: 144 },
-  { out: "cat-b",     src: "art/probes/sc2_2.png",       flip: false, h: 144 },
-  { out: "unicorn-a", src: "art/probes/felt_uni_1.png",  flip: true,  h: 152 },
-  { out: "unicorn-b", src: "art/probes/felt_uni_3.png",  flip: true,  h: 152 },
+  { out: "cat-a",     src: "art/src/sc2_1.png",       flip: false, h: 144 },
+  { out: "cat-b",     src: "art/src/sc2_2.png",       flip: false, h: 144 },
+  { out: "unicorn-a", src: "art/src/felt_uni_1.png",  flip: true,  h: 152 },
+  { out: "unicorn-b", src: "art/src/felt_uni_3.png",  flip: true,  h: 152 },
 ]
 
 // Lift every base to the same mean brightness before it is tinted.

@@ -1,0 +1,15 @@
+node_modules
+save.json
+save.json.tmp
+art/raw
+
+# Midjourney intermediates and every derived sprite dir. The four frames the
+# bake actually consumes live in art/src and ARE committed, so `node
+# tools/bake.mjs` reproduces public/art from a fresh clone.
+art/probes
+art/keyed
+art/tint
+art/game
+art/edge
+art/neu
+art/baked.png

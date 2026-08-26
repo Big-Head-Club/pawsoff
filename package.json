@@ -1,0 +1,12 @@
+{
+  "name": "relay",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "start": "node server.js",
+    "test": "node tools/assume.mjs check && node test/relay.test.mjs",
+    "assume": "node tools/assume.mjs",
+    "new": "node tools/new-game.mjs"
+  },
+  "engines": { "node": ">=20" }
+}

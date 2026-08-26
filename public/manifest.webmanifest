@@ -1,0 +1,9 @@
+{
+  "name": "Relay",
+  "short_name": "Relay",
+  "start_url": "/",
+  "display": "standalone",
+  "background_color": "#f2e6cf",
+  "theme_color": "#f2e6cf",
+  "icons": [{ "src": "/icon.png", "sizes": "512x512", "type": "image/png" }]
+}
