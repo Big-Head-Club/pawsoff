@@ -15,6 +15,8 @@ import {
   COLORS, CONF, LANES, STAGE_W, create, apply, result, schedule,
   isForbidden, step, multiplier,
 } from "./game.rules.mjs"
+import { mountBackdrop, backdropFor } from "./backdrop.mjs"
+import { celebrate, bellUp, thud, fanfare, juiceCss, setMuted, isMuted } from "./juice.mjs"
 
 // Markings, as shapes, for the banner chips and the HUD reminder. The sprites
 // carry the same six shapes baked into the tint; these are the vector twins.
@@ -49,7 +51,7 @@ const spriteSrc = (species, pose, colorIdx) =>
 const css = `
 .po { position:absolute; inset:0; display:flex; flex-direction:column; overflow:hidden; }
 
-.po-hud { flex:none; display:flex; flex-direction:column; gap:6px; padding:10px 12px 8px; z-index:3; }
+.po-hud { position:relative; z-index:3; flex:none; display:flex; flex-direction:column; gap:6px; padding:10px 12px 8px; }
 .po-top { display:flex; align-items:center; gap:10px; font-variant-numeric:tabular-nums; }
 .po-round { font-family:var(--mono); font-size:12px; letter-spacing:.1em; color:var(--ink-dim); }
 .po-hearts { display:flex; gap:3px; }
@@ -59,6 +61,9 @@ const css = `
 @keyframes po-crack { 0%{transform:scale(1)} 30%{transform:scale(1.5) rotate(-12deg)} 100%{transform:scale(1)} }
 .po-combo { font-family:var(--mono); font-size:12px; color:var(--good); min-width:34px; }
 .po-score { margin-left:auto; font-family:var(--display); font-size:22px; line-height:1; }
+.po-mute { appearance:none; border:0; background:transparent; cursor:pointer; padding:2px 0 2px 8px;
+  font-size:15px; line-height:1; opacity:.5; }
+.po-mute[aria-pressed="true"] { opacity:1; }
 
 /* THE REMINDER STRIP. Players forget the rule about eight seconds into a round
    — it is a working-memory game and the banner is gone by then — so the two
@@ -73,29 +78,36 @@ const css = `
 .po-field { position:relative; flex:1; touch-action:none; user-select:none; -webkit-user-select:none;
   cursor:pointer; overflow:hidden; }
 .po-a { position:absolute; left:0; top:0; will-change:transform; pointer-events:none;
-  image-rendering:auto; transform-origin:50% 50%; }
+  image-rendering:auto; transform-origin:50% 50%; z-index:2;
+  /* The animals sit ON a decorated backdrop, so they get their own drop shadow
+     to lift them off it. A felt toy photographed on a flat screen has no
+     contact shadow of its own, and without one it reads as a sticker lying on
+     the picture rather than a thing crossing in front of it. */
+  filter:drop-shadow(0 3px 4px rgba(0,0,0,.45)); }
 .po-a.flip { transform-origin:50% 50%; }
 .po-a.pop { animation:po-pop .18s ease-in forwards; }
 @keyframes po-pop { 0%{opacity:1} 40%{transform:var(--tf) scale(1.32); opacity:1} 100%{transform:var(--tf) scale(0); opacity:0} }
 .po-a.buzz { animation:po-buzz .35s ease-out; }
-@keyframes po-buzz { 0%,100%{filter:none} 40%{filter:brightness(1.7) saturate(1.6)} }
+@keyframes po-buzz {
+  0%,100%{filter:drop-shadow(0 3px 4px rgba(0,0,0,.45))}
+  40%{filter:drop-shadow(0 3px 4px rgba(0,0,0,.45)) brightness(1.7) saturate(1.6)} }
 
-.po-float { position:absolute; font-family:var(--display); font-size:17px; pointer-events:none;
+.po-float { z-index:3; position:absolute; font-family:var(--display); font-size:17px; pointer-events:none;
   animation:po-float .7s ease-out forwards; }
 @keyframes po-float { 0%{opacity:1; transform:translateY(0)} 100%{opacity:0; transform:translateY(-30px)} }
-.po-bit { position:absolute; width:6px; height:6px; border-radius:2px; pointer-events:none;
+.po-bit { z-index:3; position:absolute; width:6px; height:6px; border-radius:2px; pointer-events:none;
   animation:po-bit .55s ease-out forwards; }
 @keyframes po-bit { 0%{opacity:1; transform:translate(0,0) scale(1)} 100%{opacity:0; transform:translate(var(--dx),var(--dy)) scale(.3)} }
 /* A missed SAFE animal leaves a ghost at the edge it escaped from. Being told
    you lost a life teaches nothing; being shown WHICH one you let walk is the
    only feedback in the game that changes the next round. */
-.po-ghost { position:absolute; pointer-events:none; opacity:.85;
+.po-ghost { z-index:2; position:absolute; pointer-events:none; opacity:.85;
   animation:po-ghost 1s ease-out forwards; }
 @keyframes po-ghost { 0%{opacity:.9; transform:scale(1)} 100%{opacity:0; transform:scale(1.25)} }
 
 .po-shake { animation:po-shake .25s ease-in-out; }
 @keyframes po-shake { 10%,90%{transform:translateX(-3px)} 30%,70%{transform:translateX(5px)} 50%{transform:translateX(-6px)} }
-.po-flash { position:absolute; inset:0; pointer-events:none; opacity:0;
+.po-flash { z-index:4; position:absolute; inset:0; pointer-events:none; opacity:0;
   box-shadow:inset 0 0 60px 12px var(--accent); }
 .po-flash.on { animation:po-flash .35s ease-out; }
 @keyframes po-flash { 0%{opacity:.85} 100%{opacity:0} }
@@ -149,7 +161,7 @@ export default {
     const log = []
 
     if (!document.getElementById("po-css")) {
-      const s = document.createElement("style"); s.id = "po-css"; s.textContent = css; document.head.append(s)
+      const s = document.createElement("style"); s.id = "po-css"; s.textContent = css + juiceCss; document.head.append(s)
     }
 
     const wrap = document.createElement("div"); wrap.className = "po"
@@ -160,6 +172,7 @@ export default {
           <span class="po-hearts"></span>
           <span class="po-combo"></span>
           <span class="po-score">0</span>
+          <button class="po-mute" type="button" aria-label="Sound"></button>
         </div>
         <div class="po-rule"></div>
       </div>
@@ -173,6 +186,31 @@ export default {
     const $rule = wrap.querySelector(".po-rule")
     const field = wrap.querySelector(".po-field")
     const flash = wrap.querySelector(".po-flash")
+    const $mute = wrap.querySelector(".po-mute")
+
+    // Sound is ON by default here, which is only safe because the audio context
+    // is never created until a tap creates it — the browser's own gesture rule
+    // is satisfied by the game's only input, so there is no autoplay to block
+    // and no silent-until-you-find-the-toggle state to explain.
+    const MUTE_KEY = "pawsoff.muted"
+    setMuted(localStorage.getItem(MUTE_KEY) === "1")
+    const drawMute = () => {
+      $mute.textContent = isMuted() ? "\u{1F507}" : "\u{1F514}"
+      $mute.setAttribute("aria-pressed", String(!isMuted()))
+      $mute.setAttribute("aria-label", isMuted() ? "Sound off" : "Sound on")
+    }
+    $mute.onclick = (e) => {
+      e.stopPropagation()
+      setMuted(!isMuted())
+      try { localStorage.setItem(MUTE_KEY, isMuted() ? "1" : "0") } catch { /* private mode */ }
+      drawMute()
+    }
+    drawMute()
+
+    // One backdrop a day, from the seed, so the chat is looking at the same
+    // thing as well as playing the same run. ?bg=<key> overrides it for a look.
+    const bgKey = new URLSearchParams(location.search).get("bg") || backdropFor(seed)
+    const backdrop = mountBackdrop(field, bgKey)
 
     // --- live tally --------------------------------------------------------
     // The screen resolves each animal the moment it happens so the HUD is
@@ -350,12 +388,16 @@ export default {
 
       if (out === "pop") {
         a.el.classList.add("pop")
-        burst(cx, cy, COLORS[a.sp.color].hex)
-        float(cx, cy, "+" + Math.round(CONF.base * multiplier(acc.combo - 1)), "var(--ink)")
+        // acc.combo has already been incremented by step(), so the streak that
+        // pays for this celebration is the one that just ended in it.
+        const streak = acc.combo - 1
+        celebrate(field, cx, cy, COLORS[a.sp.color].hex, streak, deadEls)
+        bellUp(streak)
+        float(cx, cy, "+" + Math.round(CONF.base * multiplier(streak)), "var(--ink)")
         setTimeout(() => a.el.remove(), 200)
       } else if (out === "wrong") {
         a.el.classList.add("buzz")
-        hurt()
+        hurt(); thud()
         float(cx, cy, "✖", "var(--accent)")
         setTimeout(() => a.el.remove(), 400)
       } else if (out === "held") {
@@ -364,7 +406,7 @@ export default {
       } else {
         // A safe one walked. Show it, frozen, where it left.
         ghost(a, cx, cy, size)
-        hurt()
+        hurt(); thud()
         a.el.remove()
       }
       if (before !== acc.lives) crackHeart()
@@ -446,8 +488,10 @@ export default {
     function onVis() {
       if (document.hidden) {
         if (phase === "playing") { cancelAnimationFrame(raf); phase = "paused" }
+        backdrop.pause()
       } else if (phase === "paused") {
         phase = "playing"; last = performance.now(); raf = requestAnimationFrame(tick)
+        backdrop.resume()
       }
     }
     document.addEventListener("visibilitychange", onVis)
@@ -463,7 +507,10 @@ export default {
 
       const move = { r: state.round, taps: taps.slice() }
       log.push(move)
+      const roundNo = state.round
       apply(state, move)
+      const justPlayed = state.rounds[state.rounds.length - 1]
+      if (justPlayed && justPlayed.round === roundNo && justPlayed.clean) fanfare()
       acc = { lives: state.lives, combo: state.combo, gained: 0, lost: 0 }
       drawHud()
 
@@ -486,6 +533,7 @@ export default {
         field.removeEventListener("pointerdown", onDown)
         document.removeEventListener("visibilitychange", onVis)
         for (const d of deadEls) d.remove()
+        backdrop.destroy()
         wrap.remove()
       },
     }
