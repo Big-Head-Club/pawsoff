@@ -79,6 +79,14 @@ function preload() {
 }
 
 const css = `
+/* The title plate. The host used to render every game's title screen on a bare
+   panel, which made the one screen most likely to decide whether a link gets
+   tapped look identical across the whole collection. */
+.po-splash { position:absolute; inset:0; z-index:0;
+  background:#12141c url("/art/title/pawsoff.jpg") center/cover no-repeat; }
+.po-splash::after { content:""; position:absolute; inset:0;
+  background:linear-gradient(to bottom, rgba(18,20,28,.10) 0%, rgba(18,20,28,.34) 46%, rgba(18,20,28,.72) 100%); }
+
 .po { position:absolute; inset:0; display:flex; flex-direction:column; overflow:hidden; }
 
 .po-hud { position:relative; z-index:3; flex:none; display:flex; flex-direction:column; gap:6px; padding:10px 12px 8px; }
@@ -192,6 +200,19 @@ export default {
     "Tapping a forbidden one costs a life. So does letting a safe one walk off. Three lives for the whole run.",
     "The two forbidden kinds change every round, and the strip you share only says how each round went.",
   ],
+
+  // A parade of felt animals walking straight into a hand held up to stop them:
+  // the rule of the game, in one picture, before a word of explanation. Static
+  // on purpose — the plate is the still and the game is the motion, and putting
+  // both on the title screen would only teach the player to ignore one of them.
+  splash(root) {
+    if (!document.getElementById("po-css")) {
+      const s = document.createElement("style"); s.id = "po-css"; s.textContent = css + juiceCss; document.head.append(s)
+    }
+    const plate = document.createElement("div"); plate.className = "po-splash"
+    root.append(plate)
+    return { destroy() { plate.remove() } }
+  },
 
   mount(root, { seed, mode, coach, finish }) {
     const state = create(seed)

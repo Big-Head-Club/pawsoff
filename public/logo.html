@@ -1,0 +1,122 @@
+<!doctype html>
+<meta charset="utf-8">
+<title>PAWS OFF — logo sheet</title>
+<!--
+  The logo, built as a page rather than drawn in a paint tool, so it can be
+  re-rendered at any size and so the type is real type instead of pixels
+  somebody has to re-set by hand later.
+
+  Screenshot the three blocks below to bake the assets:
+    #mark    512x512   the icon (favicon, app icon, tile)
+    #lockup  1200x630  the tile / unfurl plate
+    #wide     wide     the in-page header lockup
+
+  The art underneath is the Midjourney plate, cropped to the torch and the beam.
+  The type is the theme's display face, which is a system font on purpose — a
+  logo that needs a webfont is a logo that renders wrong the first time somebody
+  loads it on a slow train.
+-->
+<style>
+  :root {
+    --navy: #f2e6cf;
+    --wool: #e8ddca;
+    --beam: #b8281c;
+    --warm: #b8281c;
+    --ink: #14110e;
+    --display: 'Futura', 'Avenir Next', 'Gill Sans', ui-sans-serif, system-ui, sans-serif;
+  }
+  * { box-sizing: border-box; margin: 0; }
+  body { background: #2a2a2e; font-family: var(--display); padding: 40px; display: flex;
+         flex-direction: column; gap: 40px; align-items: flex-start; }
+  .cap { color: #999; font: 500 12px/1 ui-monospace, monospace; letter-spacing: .16em;
+         text-transform: uppercase; margin-bottom: 10px; }
+
+  /* --- the mark ---------------------------------------------------------- */
+  /* A dark square, one shaft of light, and the cat standing in it. The whole
+     game is "a beam, and something to find in it", so the mark is that and
+     nothing else — no wordmark inside the square, because at 32px a wordmark
+     inside a square is a smudge. */
+  #mark { width: 512px; height: 512px; border-radius: 96px; overflow: hidden;
+          position: relative; background: var(--navy); }
+  #mark .plate { position: absolute; inset: 0; background-image: url("/art/title/pawsoff.jpg");
+          background-size: 172%; background-position: 40% 20%; }
+  /* Push the wool back so the beam reads as the brightest thing in the mark. */
+  #mark .darken { position: absolute; inset: 0; background:
+          radial-gradient(115% 88% at 52% 40%, rgba(242,230,207,0) 0%, rgba(242,230,207,.42) 46%, rgba(242,230,207,.93) 100%); }
+  #mark .glow { position: absolute; inset: 0; background:
+          radial-gradient(34% 24% at 55% 46%, rgba(184,40,28,.30), rgba(184,40,28,0) 72%); }
+
+  /* --- the tile ---------------------------------------------------------- */
+  #lockup { width: 1200px; height: 630px; position: relative; overflow: hidden;
+            background: var(--navy); }
+  /* MIRRORED. In the plate the beam runs from top-left down to the cat in the
+     middle, which is exactly where the wordmark wants to be. Flipping the whole
+     photograph moves the light to the right and leaves a big quiet field of dark
+     wool on the left to set type on. It is a craft photograph, not a face —
+     nothing in it reads as reversed. */
+  #lockup .plate { position: absolute; inset: 0; background-image: url("/art/title/pawsoff.jpg");
+            background-size: 100%; background-position: 50% 30%; }
+  /* Scrim it hard where the type goes and barely at all where the light is —
+     a card is a place to read a name. */
+  /* The hand is bottom-LEFT in this plate and the parade walks into it, so the
+     type sits on the right and the scrim is mirrored to match. Follow the
+     picture; do not crop the picture to fit a template. */
+  #lockup .scrim { position: absolute; inset: 0; background:
+            linear-gradient(270deg, rgba(242,230,207,.95) 0%, rgba(242,230,207,.88) 30%, rgba(242,230,207,.32) 58%, rgba(242,230,207,0) 80%); }
+  #lockup .type { position: absolute; right: 78px; top: 50%; transform: translateY(-50%); text-align: right; }
+  #lockup .rule { margin-left: auto; }
+
+  /* THE WORDMARK. FRANKIE'S is the small line and FINDER is the big one,
+     because the possessive is who it belongs to and the noun is what it does —
+     and because a two-word name set at one size on two lines reads as two
+     unrelated words. Both render in full at every size; nothing here clips. */
+  .word .who { font-size: 40px; letter-spacing: .30em; color: var(--warm);
+               text-transform: uppercase; font-weight: 500; }
+  .word .what { font-size: 132px; line-height: .86; letter-spacing: -.01em; color: var(--ink);
+               text-transform: uppercase; font-weight: 600; margin-top: 6px;
+               text-shadow: none; }
+  .word .rule { width: 132px; height: 5px; background: var(--warm); margin: 26px 0 20px; border-radius: 3px; }
+  .word .say { font-size: 27px; color: #6b6152; letter-spacing: .01em; }
+
+  /* --- the in-page header ------------------------------------------------ */
+  #wide { display: flex; align-items: center; gap: 22px; background: var(--navy);
+          padding: 26px 40px 26px 26px; border-radius: 18px; }
+  #wide .chip { width: 92px; height: 92px; border-radius: 22px; overflow: hidden; position: relative;
+          flex: none; background: var(--navy); }
+  #wide .chip .plate { position: absolute; inset: 0; background-image: url("/art/title/pawsoff.jpg");
+          background-size: 172%; background-position: 40% 20%; }
+  #wide .chip .darken { position: absolute; inset: 0; background:
+          radial-gradient(115% 88% at 52% 40%, rgba(242,230,207,0) 0%, rgba(242,230,207,.42) 46%, rgba(242,230,207,.93) 100%); }
+  #wide .who { font-size: 15px; }
+  #wide .what { font-size: 46px; }
+</style>
+
+<div>
+  <div class="cap">mark — 512</div>
+  <div id="mark"><div class="plate"></div><div class="darken"></div><div class="glow"></div></div>
+</div>
+
+<div>
+  <div class="cap">tile — 1200 x 630</div>
+  <div id="lockup">
+    <div class="plate"></div>
+    <div class="scrim"></div>
+    <div class="type word">
+      <div class="who">Paws</div>
+      <div class="what">Off</div>
+      <div class="rule"></div>
+      <div class="say">Tap all of them but two.</div>
+    </div>
+  </div>
+</div>
+
+<div>
+  <div class="cap">header lockup</div>
+  <div id="wide">
+    <div class="chip"><div class="plate"></div><div class="darken"></div></div>
+    <div class="word">
+      <div class="who">Paws</div>
+      <div class="what">Off</div>
+    </div>
+  </div>
+</div>
