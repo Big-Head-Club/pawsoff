@@ -188,6 +188,22 @@ const ok = (name, cond, extra = "") => {
   ].join(" ")
   const missing = [...new Set([...printed.toUpperCase()])].filter((c) => !glyph(c))
   ok("the card font has every character the card prints", missing.length === 0, JSON.stringify(missing))
+
+  // AND IT HAS TO FIT. Every band on the card shrinks to fit and then stops at a
+  // floor; past that it runs off the right edge silently, which is how the first
+  // live card read "TWO COLOURS YOU MUST NOT T". The tagline is the announce
+  // card's headline — the thing that decides whether a stranger taps the link —
+  // and the author cannot see the card from relay.config.mjs.
+  const { textWidth } = await import("../src/server/font.mjs")
+  const CARD_W = 1200, CARD_MARGIN = 92, BUDGET = CARD_W - CARD_MARGIN * 2
+  const fits = (text, floor) => textWidth(String(text).toUpperCase(), floor) <= BUDGET
+  ok("the tagline fits the card at its smallest scale", fits(config.tagline, 7),
+     `${config.tagline} = ${textWidth(config.tagline.toUpperCase(), 7)}px of ${BUDGET}`)
+  ok("the title and day number fit", fits(config.title + " #999", 4))
+  ok("the headline fits", fits(config.share.headline({ round: 22 }), 7))
+  for (const t of config.share.stats(sample)) {
+    ok(`stat tile "${t.label}" fits`, fits(t.value, 6) && fits(t.label, 4))
+  }
 }
 
 // --- config sanity ----------------------------------------------------------

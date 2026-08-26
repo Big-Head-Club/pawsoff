@@ -7,7 +7,7 @@ export default {
   // --- identity -------------------------------------------------------------
   key: "pawsoff",                      // salts the seed; never change it after launch
   title: "PAWS OFF",                    // shown everywhere
-  tagline: "Two colours you must not touch.",
+  tagline: "Tap all but two.",
   description: "Cats and unicorns cross the screen. Tap every one except the two kinds the round forbids. Same run for everyone, once a day.",
   // This file is imported by BOTH the server and the browser, so it may not
   // touch `process` unguarded — that is a blank page in production.
