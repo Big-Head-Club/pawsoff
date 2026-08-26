@@ -95,6 +95,20 @@ export function thud() {
   o.start(t); o.stop(t + 0.4)
 }
 
+// The count-in. Three flat ticks and then a note a fifth above, so "go" is
+// audibly different from "not yet" even if you are not looking at the number.
+export function tick(n) {
+  if (muted) return
+  const a = audio(); if (!a) return
+  strike(noteHz(-9 + n), a.currentTime, 0.13, 0.3)
+}
+export function go() {
+  if (muted) return
+  const a = audio(); if (!a) return
+  strike(noteHz(-2), a.currentTime, 0.24, 0.7)
+  strike(noteHz(3), a.currentTime + 0.03, 0.16, 0.6)
+}
+
 // A round survived without losing a life: a little arpeggio, played once.
 export function fanfare() {
   if (muted) return

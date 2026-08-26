@@ -41,7 +41,9 @@ export const STAGE_W = 390
 // (crossMs / interval) and is not a dial, whatever a spec says.
 export const CONF = {
   lives: LIVES,
-  bannerMs: 2000,
+  bannerMs: 900,          // cards stamp down
+  countMs: 480,           // then 3, 2, 1
+  goMs: 320,              // then GO, then the animals
   spriteW: 72,
   hitPad: 12,
   minTapGapMs: 55,        // thumb floor: taps closer than this are the same tap

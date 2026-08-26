@@ -16,7 +16,7 @@ import {
   isForbidden, step, multiplier,
 } from "./game.rules.mjs"
 import { mountBackdrop, backdropFor } from "./backdrop.mjs"
-import { celebrate, bellUp, thud, fanfare, juiceCss, setMuted, isMuted } from "./juice.mjs"
+import { celebrate, bellUp, thud, fanfare, tick, go, juiceCss, setMuted, isMuted } from "./juice.mjs"
 
 // Markings, as shapes, for the banner chips and the HUD reminder. The sprites
 // carry the same six shapes baked into the tint; these are the vector twins.
@@ -117,7 +117,14 @@ const css = `
   background:color-mix(in srgb, var(--ground) 92%, transparent); }
 .po-banner .lead { font-family:var(--mono); font-size:11px; letter-spacing:.16em;
   text-transform:uppercase; color:var(--ink-dim); }
-.po-banner .r { font-family:var(--display); font-size:clamp(30px,15cqw,54px); line-height:.9; }
+.po-banner .r { font-family:var(--display); font-size:clamp(24px,11cqw,40px); line-height:.9; }
+/* THE COUNT-IN. The rule cards stay on screen through all of it — the point is
+   not a dramatic pause, it is that the two seconds you spend reading the cards
+   are not also the two seconds the first animal is already crossing. */
+.po-count { font-family:var(--display); line-height:1; font-size:clamp(48px,26cqw,96px);
+  color:var(--accent); animation:po-count .46s cubic-bezier(.2,1.4,.4,1); }
+.po-count.go { color:var(--good); font-size:clamp(34px,18cqw,64px); }
+@keyframes po-count { 0%{transform:scale(2.1); opacity:0} 55%{transform:scale(1); opacity:1} 100%{opacity:1} }
 .po-cards { display:flex; gap:12px; }
 .po-card { display:flex; flex-direction:column; align-items:center; gap:6px; padding:12px 14px;
   border:var(--rule-w) solid var(--rule); border-radius:var(--radius); background:var(--panel);
@@ -225,6 +232,7 @@ export default {
     let raf = 0
     let scale = 1
     let deadEls = []
+    let bannerTimers = []
 
     const sched = () => state.sched
     const laneY = (lane, h) => {
@@ -281,7 +289,8 @@ export default {
         card.append(no, art, say)
         cards.append(card)
       }
-      b.append(lead, r, cards)
+      const count = document.createElement("div"); count.className = "po-count"
+      b.append(lead, r, cards, count)
       if (coach && state.round === 1) {
         const c = document.createElement("div"); c.className = "po-coach"
         c.textContent = "Tap everything else. Letting a safe one walk off costs a life too."
@@ -289,7 +298,28 @@ export default {
       }
       field.append(b)
       drawRule(); drawHud()
-      setTimeout(() => { b.remove(); startPlay() }, CONF.bannerMs)
+
+      // Cards land, then 3-2-1, then go. Cancellable: destroy() during a
+      // count-in must not fire a startPlay into a torn-down stage.
+      const timers = []
+      const at = (ms, fn) => timers.push(setTimeout(fn, ms))
+      bannerTimers = timers
+      const step = CONF.countMs
+      for (let i = 3; i >= 1; i--) {
+        at(CONF.bannerMs + (3 - i) * step, () => {
+          count.classList.remove("go")
+          count.textContent = String(i)
+          count.style.animation = "none"; void count.offsetWidth; count.style.animation = ""
+          tick(i)
+        })
+      }
+      at(CONF.bannerMs + 3 * step, () => {
+        count.classList.add("go")
+        count.textContent = "GO"
+        count.style.animation = "none"; void count.offsetWidth; count.style.animation = ""
+        go()
+      })
+      at(CONF.bannerMs + 3 * step + CONF.goMs, () => { b.remove(); startPlay() })
     }
 
     // --- play --------------------------------------------------------------
@@ -529,6 +559,7 @@ export default {
       get log() { return log },
       destroy() {
         cancelAnimationFrame(raf)
+        for (const t of bannerTimers) clearTimeout(t)
         phase = "over"
         field.removeEventListener("pointerdown", onDown)
         document.removeEventListener("visibilitychange", onVis)
