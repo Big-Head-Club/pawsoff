@@ -6,7 +6,7 @@
 import { createServer } from "node:http"
 import { readFile } from "node:fs/promises"
 import { existsSync } from "node:fs"
-import { extname, join, normalize } from "node:path"
+import { dirname, extname, join, normalize } from "node:path"
 import { fileURLToPath } from "node:url"
 
 import config from "./relay.config.mjs"
@@ -17,6 +17,7 @@ import { seedFor, normaliseCrew } from "./src/core/seed.mjs"
 import { decodeResult } from "./src/core/share.mjs"
 import * as rules from "./src/game/game.rules.mjs"
 import { loadTheme } from "./src/server/theme.mjs"
+import { createTally } from "./src/server/tally/index.js"
 
 const ROOT = fileURLToPath(new URL(".", import.meta.url))
 const PORT = Number(process.env.PORT || 3000)
@@ -25,6 +26,11 @@ const SAVE = process.env.SAVE_PATH || join(ROOT, "save.json")
 const BUILD = (process.env.RAILWAY_GIT_COMMIT_SHA ?? String(Date.now())).slice(0, 12)
 
 const store = await openStore(SAVE)
+// Analytics (tally, vendored under src/server/tally). The SQLite file sits next
+// to save.json so it lands on the same volume with no extra env var. The
+// dashboard lives at /admin/analytics/<TALLY_TOKEN>; the token is printed at
+// boot if TALLY_TOKEN is not set.
+const tally = createTally({ dir: process.env.TALLY_DIR || dirname(SAVE), tz: config.timezone })
 
 // The template repo carries a marker; a scaffolded game does not. It is the one
 // thing that distinguishes "this deploy is Relay showing itself off" from "this
@@ -229,6 +235,7 @@ const server = createServer(async (req, res) => {
   const path = decodeURIComponent(url.pathname)
 
   try {
+    if (await tally.handler(req, res)) return
     if (req.method === "POST" && path.startsWith("/api/")) {
       const fn = procedures[path.slice(5)]
       if (!fn) return json(res, 404, { error: "noSuchProcedure" })
@@ -312,8 +319,11 @@ function statsFor(r) {
   return out
 }
 
-server.listen(PORT, () => console.log(
-  `${config.title} on :${PORT} — puzzle #${puzzleNumber(today(), config.epoch)} (${today()}, ${config.timezone})`))
+server.listen(PORT, async () => {
+  console.log(`${config.title} on :${PORT} — puzzle #${puzzleNumber(today(), config.epoch)} (${today()}, ${config.timezone})`)
+  await tally.ready
+  console.log("dashboard:", tally.dashboardUrl(process.env.PUBLIC_ORIGIN || config.origin || `http://localhost:${PORT}`))
+})
 
 process.on("SIGTERM", async () => { await store.flush(); process.exit(0) })
 process.on("SIGINT", async () => { await store.flush(); process.exit(0) })

@@ -131,6 +131,7 @@ function startRun(mode) {
   clearStage()
   const seed = mode === "daily" ? ctx.seed : mode === "gate" ? ctx.practiceSeed : randomSeed()
   const started = Date.now()
+  window.tally && tally("start", { mode })
   live = game.mount($("#stage"), {
     seed, mode,
     // The gate round is allowed to talk. The daily never is.
@@ -145,6 +146,12 @@ function startRun(mode) {
       // had its player FLAGGED for cheating on an honest run.
       const r = Object.assign({}, result, { seconds, number: ctx.number, mode, log: (live && live.log) || [] })
       lastResult = r
+      // Analytics milestones, named the same in every game so dashboards line
+      // up: win/lose when the result says which, finish when it does not.
+      if (window.tally) {
+        const won = r.won ?? r.solved ?? r.win
+        tally(typeof won === "boolean" ? (won ? "win" : "lose") : "finish", { mode, seconds, score: r.metric })
+      }
       if (mode === "gate") { localStorage.setItem(SEEN_KEY, "1"); api("player.practiced").catch(() => {}); return screenGateDone(r) }
       screenResult(r, state)
     },
@@ -246,6 +253,7 @@ function askName() {
 }
 
 async function doShare(r) {
+  window.tally && tally("share", { mode: r.mode })
   const l = links({ origin: R.origin || location.origin, number: ctx.number, crew, result: config.share.token(r) })
   const text = shareText({
     title: R.title.toUpperCase(), number: ctx.number,
