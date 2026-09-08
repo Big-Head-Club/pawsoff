@@ -1,0 +1,19 @@
+{
+  "slug": "pawsoff",
+  "name": "PAWS OFF",
+  "designers": [
+    "mack"
+  ],
+  "started": "2026-08-26",
+  "tags": [
+    "Daily",
+    "Web",
+    "Hidden object"
+  ],
+  "family": "pawsoff",
+  "url": "https://paws-off-production.up.railway.app",
+  "repo": "Big-Head-Club/pawsoff",
+  "probe": "Paws Off",
+  "state": "none",
+  "shell": "hare"
+}
