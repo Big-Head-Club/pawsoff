@@ -1,0 +1,40 @@
+{
+  "art": [
+    {
+      "what": "Image generation",
+      "who": "Midjourney",
+      "url": "https://www.midjourney.com/"
+    }
+  ],
+  "code": [
+    {
+      "what": "tally, the analytics",
+      "who": "Dan Viau",
+      "url": "https://github.com/Big-Head-Club/tally",
+      "licence": "MIT"
+    },
+    {
+      "what": "Seeded randomness (mulberry32)",
+      "who": "Tommy Ettinger",
+      "url": "https://gist.github.com/tommyettinger/46a874533244883189143505d203312c",
+      "licence": "Public domain"
+    },
+    {
+      "what": "String hashing (FNV-1a)",
+      "who": "Glenn Fowler, Landon Curt Noll and Kiem-Phong Vo",
+      "url": "http://www.isthe.com/chongo/tech/comp/fnv/",
+      "licence": "Public domain"
+    },
+    {
+      "what": "Claude Code",
+      "who": "Anthropic",
+      "url": "https://claude.com/claude-code"
+    }
+  ],
+  "people": [
+    {
+      "what": "Design and direction",
+      "who": "Mack Flavelle"
+    }
+  ]
+}
