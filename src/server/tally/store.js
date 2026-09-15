@@ -57,6 +57,16 @@ export function openSqlite(file) {
                 from events where ts >= ? group by site order by visitors desc, events desc`).all(sinceMs);
     },
 
+    async engagedSites(sinceMs) {
+      return q(`select site, count(distinct vid) engaged from events
+                where ts>=? and (name in ('click','start') or (name='leave' and json_extract(props,'$.s') >= 10))
+                group by site`).all(sinceMs);
+    },
+
+    async countByName(name, sinceMs) {
+      return q(`select site, count(*) c, count(distinct vid) u from events where name=? and ts>=? group by site`).all(name, sinceMs);
+    },
+
     async stats(site, { sinceMs, todayDay, nowMs }) {
       const s = site;
       return {
@@ -87,6 +97,15 @@ export function openSqlite(file) {
         ? q('select ts, day, site, name, vid, path, ref, props from events where site=? order by id')
         : q('select ts, day, site, name, vid, path, ref, props from events order by id');
       for (const row of site ? stmt.iterate(site) : stmt.iterate()) yield row;
+    },
+
+    /** Rows since a time, optionally one site and some event names, oldest first. */
+    async range(site, { sinceMs, names = [], limit }) {
+      const where = ['ts >= ?'];
+      const args = [sinceMs];
+      if (site) { where.push('site = ?'); args.push(site); }
+      if (names.length) { where.push(`name in (${names.map(() => '?').join(',')})`); args.push(...names); }
+      return q(`select ts, day, site, name, vid, path, ref, props from events where ${where.join(' and ')} order by id limit ?`).all(...args, limit);
     },
 
     async prune(beforeMs) {
