@@ -214,7 +214,7 @@ export default {
     return { destroy() { plate.remove() } }
   },
 
-  mount(root, { seed, mode, coach, finish }) {
+  mount(root, { seed, mode, coach, finish, onActivity }) {
     const state = create(seed)
     const log = []
 
@@ -586,7 +586,7 @@ export default {
       }
       // One animal per tap, nearest centre wins. Fat fingers should not clear a
       // lane, and they should not be punished for landing between two either.
-      if (best) resolve(best, "tap")
+      if (best) { onActivity?.(e); resolve(best, "tap") }
     }
     field.addEventListener("pointerdown", onDown)
 

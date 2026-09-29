@@ -25,6 +25,17 @@ const $ = (s) => document.querySelector(s)
 const fmtMetric = (v) => String(config.metric.format ? config.metric.format(v) : v)
 const el = (tag, cls, text) => { const n = document.createElement(tag); if (cls) n.className = cls; if (text != null) n.textContent = text; return n }
 
+// --- qualified-play measurement ---------------------------------------------
+// The shared GameADay SDK owns the clocks, qualification and retention; the
+// host owns the playable boundary: a mounted run is playable, every menu,
+// result and board screen is paused. The game view reports accepted player
+// moves through the onActivity mount option. The SDK script is loaded before
+// this module, but every hook re-reads window.GameADay so a late or missing
+// SDK can never break gameplay.
+const gad = () => window.GameADay?.measure?.({ gameId: "pawsoff", build: window.BUILD || undefined })
+const gadAction = (event) => gad()?.action(event)
+gad()
+
 // --- identity ---------------------------------------------------------------
 // Anonymous by default, forever if they like. A name is asked for exactly once,
 // at the moment it buys something (a row on the board), and never before.
@@ -75,6 +86,7 @@ function setCrew(code) {
 // --- screens ----------------------------------------------------------------
 
 function clearStage() {
+  gad()?.pause()
   if (live && live.destroy) live.destroy()
   live = null
   if (splash && splash.destroy) splash.destroy()
@@ -134,9 +146,11 @@ function startRun(mode) {
   window.tally && tally("start", { mode })
   live = game.mount($("#stage"), {
     seed, mode,
+    onActivity: gadAction,
     // The gate round is allowed to talk. The daily never is.
     coach: mode === "gate",
     finish: (state, result) => {
+      gad()?.pause()
       const seconds = Math.round((Date.now() - started) / 1000)
       // SNAPSHOT THE INPUT LOG HERE, while the game is still mounted. The next
       // screen calls clearStage(), which destroys the instance and nulls `live`
@@ -156,6 +170,7 @@ function startRun(mode) {
       screenResult(r, state)
     },
   })
+  gad()?.resume()
 }
 
 function screenGateDone(r) {
