@@ -52,7 +52,7 @@ const spriteSrc = (species, pose, colorIdx) =>
 // device. Width follows from the baked frame's own aspect — both poses of a
 // species come out of the bake on one canvas, so there is exactly one aspect
 // per species and swapping frames cannot change the silhouette's footprint.
-const SPRITE_H = { cat: 62, unicorn: 70, dog: 62, horse: 70, pencil: 44, candy: 50 }
+const SPRITE_H = { cat: 62, unicorn: 70, dog: 60, horse: 68, pencil: 38, candy: 54 }
 
 // The emoji twin of each kind, for the HUD chips and the art-missing fallback.
 const EMOJI = { cat: "\u{1F408}", unicorn: "\u{1F984}", dog: "\u{1F415}", horse: "\u{1F40E}", pencil: "\u270F\uFE0F", candy: "\u{1F36C}" }
@@ -149,6 +149,7 @@ body:has(.po) #credits-link { display:none !important; }
   background:var(--panel-2); border:1px solid var(--rule-soft); }
 .po-chip .no { font-family:var(--mono); font-size:10px; color:var(--ink-dim); }
 .po-chip .who { font-size:17px; line-height:1; }
+.po-chip img.who { height:28px; width:auto; max-width:56px; object-fit:contain; margin:-4px 0; }
 
 .po-field { position:relative; flex:1; touch-action:none; user-select:none; -webkit-user-select:none;
   cursor:pointer; overflow:hidden; }
@@ -376,8 +377,11 @@ export default {
       for (const { species: sp, color } of sched().rules) {
         const chip = document.createElement("div"); chip.className = "po-chip"
         const no = document.createElement("span"); no.className = "no"; no.textContent = "NO"
-        const who = document.createElement("span"); who.className = "who"
-        who.textContent = EMOJI[sp]
+        // The chip shows the felt toy itself, in the forbidden colour: the thing
+        // to match on the field, not an emoji of a different-looking animal.
+        const who = document.createElement("img"); who.className = "who"; who.alt = ""
+        who.src = spriteSrc(sp, "a", color)
+        who.onerror = () => { const e = document.createElement("span"); e.className = "who"; e.textContent = EMOJI[sp]; who.replaceWith(e) }
         chip.append(no, who, markSvg(color, 18))
         chip.setAttribute("aria-label", `no ${COLORS[color].name} ${PLURAL[sp]}`)
         $rule.append(chip)

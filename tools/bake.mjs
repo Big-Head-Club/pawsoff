@@ -27,6 +27,13 @@ import { COLORS } from "../src/game/game.rules.mjs"
 const SET = [
   { species: "cat",     h: 144, poses: ["art/src/sc2_1.png", "art/src/sc2_2.png"], flip: false },
   { species: "unicorn", h: 152, poses: ["art/src/felt_uni_1.png", "art/src/felt_uni_3.png"], flip: true },
+  // Midjourney stills animated in place: both poses are frames of ONE video, so
+  // they are the same toy. The candy faces the camera; it is symmetric, so it
+  // shuffles sideways and the mirror for the other direction costs nothing.
+  { species: "dog",     h: 144, poses: ["art/src/new/dog_1.png", "art/src/new/dog_2.png"], flip: false },
+  { species: "horse",   h: 152, poses: ["art/src/new/horse_1.png", "art/src/new/horse_2.png"], flip: false },
+  { species: "pencil",  h: 104, poses: ["art/src/new/pencil_1.png", "art/src/new/pencil_2.png"], flip: false },
+  { species: "candy",   h: 128, poses: ["art/src/new/candy_1.png", "art/src/new/candy_2.png"], flip: false },
 ]
 
 // Lift every base to the same mean brightness before it is tinted.

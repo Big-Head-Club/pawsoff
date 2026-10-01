@@ -1,6 +1,6 @@
 # PAWS OFF
 
-A daily game. Felt cats and unicorns walk across the screen; tap every one
+A daily game. Felt cats, unicorns, dogs, horses, pencils and candy walk across the screen; tap every one
 except the two kinds the round forbids. Built on
 [Relay](https://github.com/Big-Head-Club/relay).
 
