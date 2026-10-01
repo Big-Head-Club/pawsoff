@@ -143,6 +143,28 @@ const ok = (name, cond, extra = "") => {
   ok("the clock is only a tiebreak", slow.metric === played.score)
 }
 
+// --- 2x speed: same round at double time, paid 1.5x, replayable from the log --
+{
+  const seed = 4242
+  const base = rules.create(seed).sched
+  const fast = rules.timed(base, true)
+  const tapAll = (sc) => sc.spawns.filter((sp) => !sc.forbidden(sp))
+    .map((sp) => [sp.i, sp.t + Math.round(sp.cross / 2)]).sort((a, b) => a[1] - b[1])
+    .filter((t, i, a) => i === 0 || t[1] - a[i - 1][1] >= rules.CONF.minTapGapMs)
+  const slow = rules.apply(rules.create(seed), { r: 1, taps: tapAll(base) })
+  const quick = rules.apply(rules.create(seed), { r: 1, taps: tapAll(fast), x2: true })
+  ok("2x halves every crossing", fast.spawns.every((sp, i) => Math.abs(sp.cross - base.spawns[i].cross / 2) <= 1))
+  ok("a 2x round pays 1.5x", quick.score === Math.round(slow.score * 1.5) || Math.abs(quick.score / slow.score - 1.5) < 0.05,
+     `${quick.score} vs ${slow.score}`)
+  const cheat = rules.apply(rules.create(seed), { r: 1, taps: tapAll(base), x2: true })
+  ok("slow-time taps do not count on a 2x round", cheat.score < quick.score, `${cheat.score} vs ${quick.score}`)
+  ok("the round remembers it was 2x", quick.rounds[0].x2 === true && slow.rounds[0].x2 === false)
+  ok("every round has two rules on two kinds on screen", [1, 3, 9, 14].every((r) => {
+    const sc = rules.schedule(seed, r, null)
+    return sc.rules.length === 2 && sc.rules[0].species !== sc.rules[1].species && sc.rules.every((x) => sc.kinds.includes(x.species))
+  }))
+}
+
 // --- determinism of the schedule --------------------------------------------
 {
   const a = rules.schedule(12345, 4, null)
@@ -156,7 +178,7 @@ const ok = (name, cond, extra = "") => {
     let prev = null
     for (let r = 1; r <= 8; r++) {
       const sc = rules.schedule(seed, r, prev)
-      if (prev && (sc.bad.cat === prev.cat || sc.bad.unicorn === prev.unicorn)) repeats++
+      if (prev && sc.rules.some((x) => prev[x.species] === x.color)) repeats++
       prev = sc.bad
     }
   }
@@ -225,7 +247,7 @@ const ok = (name, cond, extra = "") => {
     }
     return { baseline: y1, cx: sx / Math.max(1, area), area }
   }
-  for (const species of ["cat", "unicorn"]) {
+  for (const species of rules.SPECIES) {
     const files = ["a", "b"].map((p) => `public/art/sprites/${species}-${p}-grey.png`)
     const bufs = await Promise.all(files.map((f) => readFile(f).catch(() => null)))
     if (bufs.some((b) => !b)) { ok(`${species} frames are baked`, false, "run node tools/bake.mjs"); continue }

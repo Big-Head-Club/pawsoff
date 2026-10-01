@@ -12,8 +12,8 @@
 // puts it in the log.
 
 import {
-  COLORS, CONF, LANES, STAGE_W, create, apply, result, schedule,
-  isForbidden, step, multiplier,
+  COLORS, CONF, LANES, STAGE_W, SPECIES, create, apply, result, schedule,
+  isForbidden, step, multiplier, timed, popPoints, heldPoints, FAST,
 } from "./game.rules.mjs"
 import { mountBackdrop, backdropFor } from "./backdrop.mjs"
 import { celebrate, bellUp, thud, fanfare, tick, go, juiceCss, setMuted, isMuted } from "./juice.mjs"
@@ -52,7 +52,11 @@ const spriteSrc = (species, pose, colorIdx) =>
 // device. Width follows from the baked frame's own aspect — both poses of a
 // species come out of the bake on one canvas, so there is exactly one aspect
 // per species and swapping frames cannot change the silhouette's footprint.
-const SPRITE_H = { cat: 62, unicorn: 70 }
+const SPRITE_H = { cat: 62, unicorn: 70, dog: 62, horse: 70, pencil: 44, candy: 50 }
+
+// The emoji twin of each kind, for the HUD chips and the art-missing fallback.
+const EMOJI = { cat: "\u{1F408}", unicorn: "\u{1F984}", dog: "\u{1F415}", horse: "\u{1F40E}", pencil: "\u270F\uFE0F", candy: "\u{1F36C}" }
+const PLURAL = { cat: "cats", unicorn: "unicorns", dog: "dogs", horse: "horses", pencil: "pencils", candy: "candies" }
 
 // How far the animal travels, in stage units, per half-step. This is what makes
 // the cadence come out right at every speed: swapping on DISTANCE rather than
@@ -67,7 +71,7 @@ const STRIDE = 40
 const preloaded = []
 function preload() {
   if (preloaded.length) return
-  for (const species of ["cat", "unicorn"]) {
+  for (const species of SPECIES) {
     for (const pose of ["a", "b"]) {
       for (let c = 0; c < COLORS.length; c++) {
         const im = new Image()
@@ -99,8 +103,41 @@ const css = `
 @keyframes po-crack { 0%{transform:scale(1)} 30%{transform:scale(1.5) rotate(-12deg)} 100%{transform:scale(1)} }
 .po-combo { font-family:var(--mono); font-size:12px; color:var(--good); min-width:34px; }
 .po-score { margin-left:auto; font-family:var(--display); font-size:22px; line-height:1; }
-.po-mute { appearance:none; border:0; background:transparent; cursor:pointer; padding:2px 0 2px 8px;
-  font-size:15px; line-height:1; opacity:.5; }
+/* 2x SPEED. A pill in the HUD, not on the field: the field is where thumbs
+   land, and a button there would eat taps meant for an animal. Set during the
+   banner and between rounds; locked while animals are crossing, and it SAYS it
+   is locked by dimming rather than silently ignoring the press. */
+.po-fast { appearance:none; cursor:pointer; min-height:40px; min-width:52px; padding:0 12px; justify-content:center; border-radius:18px;
+  border:var(--rule-w) solid var(--rule); background:var(--panel); color:var(--ink);
+  font-family:var(--display); font-size:15px; line-height:1; letter-spacing:.04em;
+  display:flex; align-items:center; gap:6px; touch-action:manipulation; }
+.po-fast[aria-pressed="true"] { background:var(--accent); color:#fff; box-shadow:var(--shadow-hard); }
+.po-fast:disabled { opacity:.55; cursor:default; }
+.po-fast kbd { font-family:var(--mono); font-size:10px; padding:1px 4px; border-radius:4px;
+  border:1px solid currentColor; opacity:.7; }
+@media (hover:none) { .po-fast kbd { display:none; } }
+.po-banner .fastnote { font-family:var(--display); font-size:16px; color:var(--ink-dim); letter-spacing:.06em; }
+.po-banner .fastnote.on { color:var(--accent); }
+
+/* PHONES: THE GAME IS THE SCREEN. The host draws the stage as a framed card
+   under a title bar, which on a 320pt phone left the field barely half the
+   glass. Edge to edge instead, the title bar gone while a run is live (its two
+   buttons do nothing mid-round), and the credits tab off the field, where it
+   sat over the lane animals exit through. Lanes follow the stage height, and
+   speed is quoted against the width, so a taller field changes nothing in the
+   run the server replays. */
+@media (max-width:600px) {
+  #app { padding:0 !important; }
+  #stage { max-width:none !important; aspect-ratio:auto !important; height:100%; max-height:none !important;
+    border:0 !important; border-radius:0 !important; box-shadow:none !important; }
+  body:has(.po) #app { grid-template-rows:0 1fr; }
+  body:has(.po) #top { display:none; }
+  .po-hud { padding-top:max(10px, env(safe-area-inset-top)); }
+  .po-field { margin-bottom:env(safe-area-inset-bottom); }
+}
+body:has(.po) #credits-link { display:none !important; }
+.po-mute { appearance:none; border:0; background:transparent; cursor:pointer; padding:0 2px 0 8px;
+  min-width:36px; min-height:36px; font-size:17px; line-height:1; opacity:.5; touch-action:manipulation; }
 .po-mute[aria-pressed="true"] { opacity:1; }
 
 /* THE REMINDER STRIP. Players forget the rule about eight seconds into a round
@@ -108,10 +145,10 @@ const css = `
    forbidden kinds sit in the HUD for the whole round. Without this the game is
    not hard, it is a memory test with a tap minigame attached. */
 .po-rule { display:flex; gap:8px; align-items:center; }
-.po-chip { display:flex; align-items:center; gap:4px; padding:3px 7px; border-radius:20px;
+.po-chip { display:flex; align-items:center; gap:5px; padding:4px 9px; border-radius:20px;
   background:var(--panel-2); border:1px solid var(--rule-soft); }
 .po-chip .no { font-family:var(--mono); font-size:10px; color:var(--ink-dim); }
-.po-chip .who { font-size:13px; }
+.po-chip .who { font-size:17px; line-height:1; }
 
 .po-field { position:relative; flex:1; touch-action:none; user-select:none; -webkit-user-select:none;
   cursor:pointer; overflow:hidden; }
@@ -163,17 +200,17 @@ const css = `
   color:var(--accent); animation:po-count .46s cubic-bezier(.2,1.4,.4,1); }
 .po-count.go { color:var(--good); font-size:clamp(34px,18cqw,64px); }
 @keyframes po-count { 0%{transform:scale(2.1); opacity:0} 55%{transform:scale(1); opacity:1} 100%{opacity:1} }
-.po-cards { display:flex; gap:12px; }
-.po-card { display:flex; flex-direction:column; align-items:center; gap:6px; padding:12px 14px;
+.po-cards { display:flex; gap:12px; width:100%; max-width:340px; }
+.po-card { flex:1 1 0; min-width:0; display:flex; flex-direction:column; align-items:center; gap:6px; padding:12px 14px;
   border:var(--rule-w) solid var(--rule); border-radius:var(--radius); background:var(--panel);
   box-shadow:var(--shadow-hard); animation:po-stamp .35s cubic-bezier(.2,1.5,.4,1) backwards; }
 .po-card:nth-child(2) { animation-delay:.14s; }
 @keyframes po-stamp { 0%{transform:scale(1.9) rotate(-7deg); opacity:0} 100%{transform:scale(1) rotate(0); opacity:1} }
 .po-card .no { font-family:var(--display); font-size:15px; color:var(--accent); letter-spacing:.06em; }
-.po-card .art { position:relative; width:62px; height:52px; display:grid; place-items:center; }
-.po-card .art img { max-width:100%; max-height:100%; }
+.po-card .art { position:relative; width:100%; height:68px; display:grid; place-items:center; overflow:hidden; }
+.po-card .art img { width:100%; height:100%; object-fit:contain; }
 .po-card .art .fallback { font-size:34px; }
-.po-card .say { font-size:12px; color:var(--ink-dim); text-align:center; }
+.po-card .say { font-size:13px; line-height:1.25; color:var(--ink-dim); text-align:center; }
 
 .po-coach { position:absolute; left:0; right:0; bottom:8px; text-align:center; font-size:12px;
   color:var(--ink-dim); padding:0 14px; z-index:3; }
@@ -196,9 +233,9 @@ const HEART = (filled) => {
 export default {
   glyphs: { hit: "\u{1F7E9}", near: "\u{1F7E8}", miss: "⬜", bad: "\u{1F7E5}" },
   how: [
-    "Cats and unicorns cross the screen. Tap every one except the two kinds the round tells you to leave alone.",
+    "Cats, unicorns, dogs, horses, pencils and candy cross the screen. Tap every one except the two kinds the round tells you to leave alone.",
     "Tapping a forbidden one costs a life. So does letting a safe one walk off. Three lives for the whole run.",
-    "The two forbidden kinds change every round, and the strip you share only says how each round went.",
+    "The two forbidden kinds change every round. Turn on 2x speed for 1.5x points.",
   ],
 
   // A parade of felt animals walking straight into a hand held up to stop them:
@@ -230,6 +267,7 @@ export default {
           <span class="po-hearts"></span>
           <span class="po-combo"></span>
           <span class="po-score">0</span>
+          <button class="po-fast" type="button" aria-pressed="false"></button>
           <button class="po-mute" type="button" aria-label="Sound"></button>
         </div>
         <div class="po-rule"></div>
@@ -245,6 +283,38 @@ export default {
     const field = wrap.querySelector(".po-field")
     const flash = wrap.querySelector(".po-flash")
     const $mute = wrap.querySelector(".po-mute")
+    const $fast = wrap.querySelector(".po-fast")
+
+    // 2x SPEED: the player's choice sticks across rounds and runs. It is read
+    // at the moment a round starts, so the round's speed and its pay are fixed
+    // for the whole round and the move records exactly what was played.
+    const FAST_KEY = "pawsoff.fast"
+    let fast = false
+    try { fast = localStorage.getItem(FAST_KEY) === "1" } catch { /* private mode */ }
+    let roundFast = false
+    let roundSched = null
+    function drawFast() {
+      $fast.setAttribute("aria-pressed", String(fast))
+      $fast.setAttribute("aria-label", fast ? `2x speed on, ${FAST.pay}x points` : "2x speed off")
+      $fast.disabled = state.over || phase === "playing" || phase === "paused" || phase === "over"
+      $fast.innerHTML = `2x <kbd>F</kbd>`
+      const note = field.querySelector(".po-banner .fastnote")
+      if (note) drawNote(note)
+    }
+    // The pay is said on the banner, not on the button: a button gets a label.
+    function drawNote(note) {
+      note.classList.toggle("on", fast)
+      note.textContent = fast ? `2x SPEED · ${FAST.pay}x POINTS` : `2x SPEED PAYS ${FAST.pay}x POINTS`
+    }
+    function toggleFast() {
+      if ($fast.disabled) return
+      fast = !fast
+      try { localStorage.setItem(FAST_KEY, fast ? "1" : "0") } catch { /* private mode */ }
+      drawFast()
+    }
+    $fast.onclick = (e) => { e.stopPropagation(); toggleFast() }
+    const onKey = (e) => { if ((e.key === "f" || e.key === "F") && !e.metaKey && !e.ctrlKey) toggleFast() }
+    document.addEventListener("keydown", onKey)
 
     // Sound is ON by default here, which is only safe because the audio context
     // is never created until a tap creates it — the browser's own gesture rule
@@ -285,7 +355,8 @@ export default {
     let deadEls = []
     let bannerTimers = []
 
-    const sched = () => state.sched
+    // The schedule being PLAYED: today's round, at the speed it was started at.
+    const sched = () => (roundSched && roundSched.round === state.round ? roundSched : state.sched)
     const laneY = (lane, h) => {
       const top = h * 0.11, span = h * 0.78
       return top + (lane + 0.5) * (span / LANES)
@@ -302,13 +373,13 @@ export default {
 
     function drawRule() {
       $rule.replaceChildren()
-      for (const sp of ["cat", "unicorn"]) {
+      for (const { species: sp, color } of sched().rules) {
         const chip = document.createElement("div"); chip.className = "po-chip"
         const no = document.createElement("span"); no.className = "no"; no.textContent = "NO"
         const who = document.createElement("span"); who.className = "who"
-        who.textContent = sp === "cat" ? "\u{1F408}" : "\u{1F984}"
-        chip.append(no, who, markSvg(sched().bad[sp], 15))
-        chip.setAttribute("aria-label", `no ${COLORS[sched().bad[sp]].name} ${sp}s`)
+        who.textContent = EMOJI[sp]
+        chip.append(no, who, markSvg(color, 18))
+        chip.setAttribute("aria-label", `no ${COLORS[color].name} ${PLURAL[sp]}`)
         $rule.append(chip)
       }
     }
@@ -320,8 +391,7 @@ export default {
       const lead = document.createElement("div"); lead.className = "lead"; lead.textContent = "this round"
       const r = document.createElement("div"); r.className = "r"; r.textContent = "ROUND " + state.round
       const cards = document.createElement("div"); cards.className = "po-cards"
-      for (const spec of ["cat", "unicorn"]) {
-        const ci = sched().bad[spec]
+      for (const { species: spec, color: ci } of sched().rules) {
         const card = document.createElement("div"); card.className = "po-card"
         const no = document.createElement("div"); no.className = "no"; no.textContent = "PAWS OFF"
         const art = document.createElement("div"); art.className = "art"
@@ -329,26 +399,28 @@ export default {
         img.src = spriteSrc(spec, "a", ci); img.alt = ""
         img.onerror = () => {
           const f = document.createElement("span"); f.className = "fallback"
-          f.textContent = spec === "cat" ? "\u{1F408}" : "\u{1F984}"
+          f.textContent = EMOJI[spec]
           f.style.color = COLORS[ci].hex
           art.replaceChildren(f, markSvg(ci, 20))
         }
         art.append(img)
         const say = document.createElement("div"); say.className = "say"
         say.append(markSvg(ci, 15))
-        say.append(document.createTextNode(" " + COLORS[ci].name + " " + spec + "s"))
+        say.append(document.createTextNode(" " + COLORS[ci].name + " " + PLURAL[spec]))
         card.append(no, art, say)
         cards.append(card)
       }
       const count = document.createElement("div"); count.className = "po-count"
-      b.append(lead, r, cards, count)
+      const note = document.createElement("div"); note.className = "fastnote"
+      drawNote(note)
+      b.append(lead, r, cards, note, count)
       if (coach && state.round === 1) {
         const c = document.createElement("div"); c.className = "po-coach"
         c.textContent = "Tap everything else. Letting a safe one walk off costs a life too."
         b.append(c)
       }
       field.append(b)
-      drawRule(); drawHud()
+      drawRule(); drawHud(); drawFast()
 
       // Cards land, then 3-2-1, then go. Cancellable: destroy() during a
       // count-in must not fire a startPlay into a torn-down stage.
@@ -375,6 +447,8 @@ export default {
 
     // --- play --------------------------------------------------------------
     function startPlay() {
+      roundFast = fast
+      roundSched = timed(state.sched, roundFast)
       clock = 0
       last = performance.now()
       taps = []
@@ -384,8 +458,9 @@ export default {
       // still fires in a backgrounded tab but rAF does not, so a banner that
       // times out while the tab is hidden would otherwise start a round that
       // cannot advance — and then resume mid-way when the player comes back.
-      if (document.hidden) { phase = "paused"; return }
+      if (document.hidden) { phase = "paused"; drawFast(); return }
       phase = "playing"
+      drawFast()
       raf = requestAnimationFrame(tick)
     }
 
@@ -401,7 +476,7 @@ export default {
         const d = document.createElement("div")
         d.className = el.className
         d.style.cssText = el.style.cssText
-        d.style.width = (SPRITE_H[sp.species] * 1.3) + "px"
+        d.style.width = (SPRITE_H[sp.species] * 1.3 * scale) + "px"
         d.style.background = COLORS[sp.color].hex
         d.style.borderRadius = sp.species === "cat" ? "34% 34% 26% 26%" : "46% 20% 26% 26%"
         d.style.border = "2px solid rgba(0,0,0,.55)"
@@ -495,7 +570,7 @@ export default {
         const streak = acc.combo - 1
         celebrate(field, cx, cy, COLORS[a.sp.color].hex, streak, deadEls)
         bellUp(streak)
-        float(cx, cy, "+" + Math.round(CONF.base * multiplier(streak)), "var(--ink)")
+        float(cx, cy, "+" + popPoints(sched(), streak), "var(--ink)")
         setTimeout(() => a.el.remove(), 200)
       } else if (out === "wrong") {
         a.el.classList.add("buzz")
@@ -503,7 +578,7 @@ export default {
         float(cx, cy, "✖", "var(--accent)")
         setTimeout(() => a.el.remove(), 400)
       } else if (out === "held") {
-        float(cx, cy, "+" + CONF.restraintBonus, "var(--good)")
+        float(cx, cy, "+" + heldPoints(sched()), "var(--good)")
         a.el.remove()
       } else {
         // A safe one walked. Show it, frozen, where it left.
@@ -613,14 +688,14 @@ export default {
       live = []
       doneIds.clear()
 
-      const move = { r: state.round, taps: taps.slice() }
+      const move = roundFast ? { r: state.round, taps: taps.slice(), x2: true } : { r: state.round, taps: taps.slice() }
       log.push(move)
       const roundNo = state.round
       apply(state, move)
       const justPlayed = state.rounds[state.rounds.length - 1]
       if (justPlayed && justPlayed.round === roundNo && justPlayed.clean) fanfare()
       acc = { lives: state.lives, combo: state.combo, gained: 0, lost: 0 }
-      drawHud()
+      drawHud(); drawFast()
 
       if (state.over) {
         phase = "over"
@@ -642,6 +717,7 @@ export default {
         phase = "over"
         field.removeEventListener("pointerdown", onDown)
         document.removeEventListener("visibilitychange", onVis)
+        document.removeEventListener("keydown", onKey)
         for (const d of deadEls) d.remove()
         backdrop.destroy()
         wrap.remove()

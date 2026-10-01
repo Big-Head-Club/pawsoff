@@ -27,7 +27,30 @@ export const COLORS = [
   { key: "purple", hex: "#A855F7", mark: "heart",    name: "heart"    },
   { key: "pink",   hex: "#EC4899", mark: "diamond",  name: "diamond"  },
 ]
-export const SPECIES = ["cat", "unicorn"]
+// Six kinds. Each round names TWO of the kinds on screen and forbids one colour
+// of each; every other kind on screen is free to tap in any colour, which is
+// what makes a red dog crossing under "NO red cats" a real test of reading.
+export const SPECIES = ["cat", "unicorn", "dog", "horse", "pencil", "candy"]
+
+// 2x SPEED. A per-ROUND choice carried in the move as `x2: true`: the same
+// schedule played at double time, paying 1.5x. Per round rather than per run so
+// the player can flip it between rounds, and so the server can replay it from
+// the log with nothing else to know.
+export const FAST = { time: 2, pay: 1.5 }
+export function timed(sched, x2) {
+  if (!x2) return sched
+  return {
+    ...sched,
+    x2: true,
+    pay: FAST.pay,
+    spawns: sched.spawns.map((sp) => ({
+      ...sp,
+      t: Math.round(sp.t / FAST.time),
+      speed: sp.speed * FAST.time,
+      cross: Math.round(sp.cross / FAST.time),
+    })),
+  }
+}
 export const LIVES = 3
 export const LANES = 7
 
@@ -88,44 +111,49 @@ export function schedule(seed, r, prevBad) {
   const rng = makeRng((seed ^ (r * 0x9e3779b1)) >>> 0)
   const c = roundConf(r)
 
-  // Which colours are in play this round, and which two are forbidden.
+  // Which colours are in play this round.
   const pool = rng.sample(COLORS.map((_, i) => i), c.colors)
+
+  // Which kinds are on screen: two at first, one more every other round, all
+  // six from round 9. Two of them carry the round's rules.
+  const kindsN = Math.min(SPECIES.length, 2 + Math.floor((r - 1) / 2))
+  const inPlay = rng.sample(SPECIES.map((_, i) => i), kindsN).map((i) => SPECIES[i])
+  const ruled = rng.sample(inPlay.map((_, i) => i), 2).map((i) => inPlay[i])
+
   const pickBad = (species) => {
-    const banned = prevBad ? prevBad[species] : -1        // never the same twice running
+    const banned = prevBad && prevBad[species] != null ? prevBad[species] : -1   // never the same twice running
     const legal = pool.filter((i) => i !== banned)
     return rng.pick(legal.length ? legal : pool)
   }
-  let badCat = pickBad("cat")
-  let badUni = pickBad("unicorn")
+  const c0 = pickBad(ruled[0])
+  let c1 = pickBad(ruled[1])
   // Rounds 1-2 keep the two rules distinct: the first thing a player learns is
   // that there are two rules, and that is invisible if both say the same colour.
-  if (r <= 2 && badUni === badCat) {
-    // Re-picking here has to keep honouring the no-repeat rule it just
-    // satisfied, or round 2 quietly hands back round 1's unicorn colour and the
-    // banner stops being worth reading on the one round it is being taught.
-    const prevUni = prevBad ? prevBad.unicorn : -1
-    const other = pool.filter((i) => i !== badCat && i !== prevUni)
-    if (other.length) badUni = rng.pick(other)
+  if (r <= 2 && c1 === c0) {
+    const prev1 = prevBad && prevBad[ruled[1]] != null ? prevBad[ruled[1]] : -1
+    const other = pool.filter((i) => i !== c0 && i !== prev1)
+    if (other.length) c1 = rng.pick(other)
     else {
-      const any = pool.filter((i) => i !== badCat)
-      if (any.length) badUni = rng.pick(any)
+      const any = pool.filter((i) => i !== c0)
+      if (any.length) c1 = rng.pick(any)
     }
   }
-  const bad = { cat: badCat, unicorn: badUni }
+  const bad = { [ruled[0]]: c0, [ruled[1]]: c1 }
+  const rules = [{ species: ruled[0], color: c0 }, { species: ruled[1], color: c1 }]
 
-  // Species split, then colours: 30% of each species' spawns are forbidden, with
-  // a floor so a round always has something to hold back from.
-  const catCount = Math.round(c.spawns * rng.float(0.4, 0.6))
-  const counts = { cat: catCount, unicorn: c.spawns - catCount }
-
+  // The forbidden share is of the whole round, split across the two rules, so
+  // adding free kinds does not quietly make the round easier to hold back in.
+  const badTotal = Math.max(2, Math.round(c.spawns * c.badShare))
   const kinds = []
-  for (const sp of SPECIES) {
-    const n = counts[sp]
-    const badN = Math.min(n, Math.max(n < 2 ? 1 : 2, Math.round(n * c.badShare)))
-    const others = pool.filter((i) => i !== bad[sp])
-    for (let i = 0; i < n; i++) {
-      kinds.push({ species: sp, color: i < badN ? bad[sp] : (others.length ? rng.pick(others) : bad[sp]) })
-    }
+  for (let i = 0; i < badTotal; i++) {
+    const rule = rules[i % 2]
+    kinds.push({ species: rule.species, color: rule.color })
+  }
+  for (let i = badTotal; i < c.spawns; i++) {
+    const species = rng.pick(inPlay)
+    // A free kind may wear a forbidden colour — that is the decoy.
+    const legal = bad[species] != null ? pool.filter((k) => k !== bad[species]) : pool
+    kinds.push({ species, color: rng.pick(legal.length ? legal : pool) })
   }
   const order = rng.shuffle(kinds)
 
@@ -164,7 +192,7 @@ export function schedule(seed, r, prevBad) {
       cross: crossMs(speed),
     })
   }
-  return { round: r, colors: pool, bad, spawns, forbidden: (s) => bad[s.species] === s.color }
+  return { round: r, colors: pool, kinds: inPlay, bad, rules, pay: 1, spawns, forbidden: (s) => bad[s.species] === s.color }
 }
 
 // --- state -------------------------------------------------------------------
@@ -186,6 +214,9 @@ export function create(seed) {
 export const multiplier = (combo) =>
   Math.min(CONF.comboCap, 1 + Math.floor(combo / CONF.comboStep) * 0.5)
 
+export const popPoints = (sched, combo) => Math.round(CONF.base * multiplier(combo) * (sched.pay || 1))
+export const heldPoints = (sched) => Math.round(CONF.restraintBonus * (sched.pay || 1))
+
 export const isForbidden = (sched, sp) => sched.bad[sp.species] === sp.color
 
 // What ONE animal resolving does to the running tally. The screen calls this the
@@ -198,11 +229,11 @@ export function step(acc, sched, sp, kind) {
   const forbidden = isForbidden(sched, sp)
   if (kind === "tap") {
     if (forbidden) { acc.lives--; acc.lost++; acc.combo = 0; return "wrong" }
-    acc.gained += Math.round(CONF.base * multiplier(acc.combo))
+    acc.gained += popPoints(sched, acc.combo)
     acc.combo++
     return "pop"
   }
-  if (forbidden) { acc.gained += CONF.restraintBonus; return "held" }   // held back: correct
+  if (forbidden) { acc.gained += heldPoints(sched); return "held" }   // held back: correct
   acc.lives--; acc.lost++; acc.combo = 0                                // let a safe one walk
   return "escaped"
 }
@@ -212,7 +243,7 @@ export function apply(state, move) {
   if (state.over) return state
   if (!move || move.r !== state.round) return state          // out of order: ignored, not thrown
 
-  const sched = state.sched
+  const sched = timed(state.sched, move.x2 === true)
   const taps = Array.isArray(move.taps) ? move.taps : []
 
   // Legalise the taps: on-screen at the claimed moment, one per animal, no two
@@ -248,12 +279,12 @@ export function apply(state, move) {
     step(acc, sched, e.sp, e.kind)
     if (acc.lives <= 0) { acc.lives = 0; break }
   }
-  if (acc.lost === 0) acc.gained += CONF.cleanRoundBonus * state.round
+  if (acc.lost === 0) acc.gained += Math.round(CONF.cleanRoundBonus * state.round * sched.pay)
   state.lives = acc.lives
   state.combo = acc.combo
   state.score += acc.gained
   const lost = acc.lost
-  state.rounds.push({ round: state.round, clean: lost === 0, livesLost: lost, score: acc.gained })
+  state.rounds.push({ round: state.round, clean: lost === 0, livesLost: lost, score: acc.gained, x2: !!sched.x2 })
 
   if (state.lives <= 0) { state.over = true; return state }
   state.prevBad = sched.bad
@@ -286,7 +317,7 @@ export function result(state, { seconds = 0 } = {}) {
     metric: state.score,
     tiebreak: -secs,
     // The rule that ended the run — the "so close" line on the results screen.
-    killedBy: { cat: COLORS[last.bad.cat].mark, unicorn: COLORS[last.bad.unicorn].mark },
+    killedBy: last.rules.map((x) => ({ species: x.species, mark: COLORS[x.color].mark })),
     events: events_(state),
   }
 }
@@ -304,7 +335,8 @@ export function replay(seed, log) {
 // it is handed. It taps the safe ones and holds back on the forbidden ones,
 // imperfectly, which is what a person does.
 export function moves(state, rng) {
-  const sched = state.sched
+  const x2 = rng.chance(0.3)
+  const sched = timed(state.sched, x2)
   const taps = []
   for (const sp of sched.spawns) {
     const forbidden = sched.bad[sp.species] === sp.color
@@ -318,7 +350,7 @@ export function moves(state, rng) {
     if (t[1] - last < CONF.minTapGapMs) continue
     spaced.push(t); last = t[1]
   }
-  return [{ r: state.round, taps: spaced }]
+  return [x2 ? { r: state.round, taps: spaced, x2 } : { r: state.round, taps: spaced }]
 }
 
 // The practice round is a hand-picked seed, not a random one: a first-ever

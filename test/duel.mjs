@@ -19,8 +19,8 @@ const EYES = { onset: 160, idMs: 310, tapGap: 165, slip: 0.05 }
 // The only thing that varies: given an identified animal, tap it or not.
 const POLICIES = {
   "reads both rules": (sp, sched) => sched.bad[sp.species] !== sp.color,
-  "cat rule only":    (sp, sched) => sp.species !== "cat" || sched.bad.cat !== sp.color,
-  "colour, no species": (sp, sched) => sp.color !== sched.bad.cat && sp.color !== sched.bad.unicorn,
+  "first rule only":  (sp, sched) => sp.species !== sched.rules[0].species || sched.rules[0].color !== sp.color,
+  "colour, no species": (sp, sched) => !sched.rules.some((x) => x.color === sp.color),
   "taps everything":  () => true,
   "taps nothing":     () => false,
   "coin flip":        (sp, sched, rng) => rng.chance(0.5),
