@@ -58,6 +58,30 @@ let me = null             // { streak, playedToday, practiced, displayName }
 let live = null           // mounted game instance
 let splash = null         // the game's own title-screen backdrop, if it has one
 let lastResult = null
+let activeRun = null
+let gadPlayable = false
+let gadState = null
+let gadPageActive = true
+
+function gadSync() {
+  const measurement = window.GameADay?.measure({ gameId: "pawsoff", build: window.BUILD })
+  if (!measurement) return
+  const playing = gadPlayable && gadPageActive && $("#sheet").hidden && !document.hidden && document.hasFocus()
+  if (playing !== gadState) {
+    gadState = playing
+    if (playing) measurement.resume()
+    else measurement.pause()
+  }
+  return measurement
+}
+function gadPlay(playing) { gadPlayable = playing; gadSync() }
+window.addEventListener("gameaday:ready", gadSync)
+document.addEventListener("visibilitychange", gadSync)
+window.addEventListener("focus", gadSync)
+window.addEventListener("blur", gadSync)
+window.addEventListener("pagehide", () => { gadPageActive = false; gadSync() })
+window.addEventListener("pageshow", () => { gadPageActive = true; gadSync() })
+gadSync()
 
 function toast(msg) {
   const t = $("#toast"); t.textContent = msg; t.classList.add("on")
@@ -75,6 +99,8 @@ function setCrew(code) {
 // --- screens ----------------------------------------------------------------
 
 function clearStage() {
+  activeRun = null
+  gadPlay(false)
   if (live && live.destroy) live.destroy()
   live = null
   if (splash && splash.destroy) splash.destroy()
@@ -129,13 +155,21 @@ function screenHome() {
 
 function startRun(mode) {
   clearStage()
+  const run = activeRun = {}
   const seed = mode === "daily" ? ctx.seed : mode === "gate" ? ctx.practiceSeed : randomSeed()
   const started = Date.now()
   live = game.mount($("#stage"), {
     seed, mode,
     // The gate round is allowed to talk. The daily never is.
     coach: mode === "gate",
+    onPlayable: (playing) => { if (activeRun === run) gadPlay(playing) },
+    onActivity: (event) => {
+      if (activeRun !== run || !event?.isTrusted || event.repeat) return
+      const measurement = gadSync()
+      if (gadState) measurement?.action(event)
+    },
     finish: (state, result) => {
+      if (activeRun !== run) return
       const seconds = Math.round((Date.now() - started) / 1000)
       // SNAPSHOT THE INPUT LOG HERE, while the game is still mounted. The next
       // screen calls clearStage(), which destroys the instance and nulls `live`
@@ -316,9 +350,10 @@ function openSheet(fill) {
   const sheet = $("#sheet"), body = sheet.querySelector(".sheet-body")
   body.replaceChildren(); fill(body)
   sheet.hidden = false
+  gadSync()
   sheet.onclick = (e) => { if (e.target === sheet) closeSheet() }
 }
-function closeSheet() { $("#sheet").hidden = true }
+function closeSheet() { $("#sheet").hidden = true; gadSync() }
 
 function howSheet() {
   openSheet((body) => {

@@ -193,7 +193,7 @@ export default {
     "The two forbidden kinds change every round, and the strip you share only says how each round went.",
   ],
 
-  mount(root, { seed, mode, coach, finish }) {
+  mount(root, { seed, mode, coach, finish, onActivity, onPlayable }) {
     const state = create(seed)
     const log = []
 
@@ -255,6 +255,7 @@ export default {
     // the number on screen and the number on the board cannot disagree.
     let acc = { lives: state.lives, combo: state.combo, gained: 0, lost: 0 }
     let taps = []
+    let lastAcceptedTap = -Infinity
     let live = []            // { sp, el, x, y, done }
     let phase = "banner"     // banner | playing | interlude | over
     let clock = 0            // ms into the round, pause-aware
@@ -295,6 +296,7 @@ export default {
     // --- banner ------------------------------------------------------------
     function showBanner() {
       phase = "banner"
+      onPlayable?.(false)
       const b = document.createElement("div"); b.className = "po-banner"
       const lead = document.createElement("div"); lead.className = "lead"; lead.textContent = "this round"
       const r = document.createElement("div"); r.className = "r"; r.textContent = "ROUND " + state.round
@@ -357,14 +359,16 @@ export default {
       clock = 0
       last = performance.now()
       taps = []
+      lastAcceptedTap = -Infinity
       live = []
       acc = { lives: acc.lives, combo: acc.combo, gained: 0, lost: 0 }
       // A round must not begin on a screen nobody is looking at. `setTimeout`
       // still fires in a backgrounded tab but rAF does not, so a banner that
       // times out while the tab is hidden would otherwise start a round that
       // cannot advance — and then resume mid-way when the player comes back.
-      if (document.hidden) { phase = "paused"; return }
+      if (document.hidden) { phase = "paused"; onPlayable?.(false); return }
       phase = "playing"
+      onPlayable?.(true)
       raf = requestAnimationFrame(tick)
     }
 
@@ -455,13 +459,21 @@ export default {
     const doneIds = new Set()
     const isDone = (i) => doneIds.has(i)
 
-    function resolve(a, kind) {
+    function resolve(a, kind, event) {
       if (a.done) return
       a.done = true
       doneIds.add(a.sp.i)
       const before = acc.lives
       const out = step(acc, sched(), a.sp, kind)
-      if (kind === "tap") taps.push([a.sp.i, Math.round(clock)])
+      if (kind === "tap") {
+        const time = Math.round(clock)
+        taps.push([a.sp.i, time])
+        // Match the replay's on-screen window and thumb floor without changing the legacy log.
+        if (time >= a.sp.t && time <= a.sp.t + a.sp.cross && time - lastAcceptedTap >= CONF.minTapGapMs) {
+          lastAcceptedTap = time
+          onActivity?.(event)
+        }
+      }
 
       const size = SPRITE_H[a.sp.species] * scale
       const wpx = (a.wUnits || SPRITE_H[a.sp.species] * 1.3) * scale
@@ -565,7 +577,7 @@ export default {
       }
       // One animal per tap, nearest centre wins. Fat fingers should not clear a
       // lane, and they should not be punished for landing between two either.
-      if (best) resolve(best, "tap")
+      if (best) resolve(best, "tap", e)
     }
     field.addEventListener("pointerdown", onDown)
 
@@ -574,10 +586,11 @@ export default {
     // advances; the round resumes where it was.
     function onVis() {
       if (document.hidden) {
-        if (phase === "playing") { cancelAnimationFrame(raf); phase = "paused" }
+        if (phase === "playing") { cancelAnimationFrame(raf); phase = "paused"; onPlayable?.(false) }
         backdrop.pause()
       } else if (phase === "paused") {
         phase = "playing"; last = performance.now(); raf = requestAnimationFrame(tick)
+        onPlayable?.(true)
         backdrop.resume()
       }
     }
@@ -588,6 +601,7 @@ export default {
       if (phase === "interlude" || phase === "over") return
       cancelAnimationFrame(raf)
       phase = "interlude"
+      onPlayable?.(false)
       for (const a of live) { a.el.remove() }
       live = []
       doneIds.clear()
@@ -616,6 +630,7 @@ export default {
     return {
       get log() { return log },
       destroy() {
+        onPlayable?.(false)
         cancelAnimationFrame(raf)
         for (const t of bannerTimers) clearTimeout(t)
         phase = "over"
