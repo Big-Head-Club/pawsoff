@@ -160,3 +160,27 @@ ol.board .v { font-weight: 700; }
   font-size: 14px; opacity: 0; pointer-events: none; transition: .2s; z-index: 60;
 }
 #toast.on { opacity: 1; transform: translate(-50%, 0); }
+
+/* THE DOOR ON A WIDE SCREEN IS ONE ROW, NOT A PHONE COLUMN. Mack, 2026-10-16, on a laptop: "our games look
+   stupid on computer when more than 50% of the screen is filled with sdk menu", "and menus in general". The
+   title block, Play, Practice and the links share a row across the foot of the splash; the other games
+   (gameaday shelf, in its row under the stage) are a short strip. Menus, cards and the shelf never take more
+   than about a quarter of a desktop window. */
+[data-gameaday-shelf] { zoom: .78; }
+@media (min-width: 760px) {
+  [data-gameaday-shelf] { zoom: .58; }
+  #stage > .screen.on-splash { max-width: none; display: grid; grid-template-columns: 1fr auto auto auto; grid-template-areas: "title play practice links"; align-items: center; column-gap: 22px; row-gap: 10px; text-align: left; padding: 16px 36px 8px; }
+  #stage > .screen.on-splash > * { margin-top: 0; }
+  .screen.on-splash .doortitle { grid-area: title; display: flex; flex-direction: column; gap: 2px; min-width: 0; }
+  .screen.on-splash .doortitle .big { font-size: clamp(26px, 3.2vw, 40px); }
+  .screen.on-splash .doortitle > * { margin-top: 0; }
+  .screen.on-splash .btn.play { grid-area: play; width: auto; min-width: 240px; margin: 0; }
+  .screen.on-splash .btn.practice { grid-area: practice; width: auto; min-width: 0; margin: 0; }
+  .screen.on-splash .feet { grid-area: links; flex-direction: column; align-items: flex-start; gap: 6px; margin: 0; }
+  .screen.on-splash > .label, .screen.on-splash > .stack, .screen.on-splash > .btn:not(.play):not(.practice) { grid-column: 1 / -1; margin: 0; }
+  /* the result: the thing the player made beside the words */
+  #stage > .screen:has(.resultart) { max-width: 960px; display: grid; grid-template-columns: minmax(0, 420px) 1fr; grid-auto-flow: row; column-gap: 36px; row-gap: 10px; align-items: center; text-align: left; }
+  #stage > .screen:has(.resultart) > * { margin-top: 0; grid-column: 2; }
+  #stage > .screen:has(.resultart) .resultart { grid-column: 1; grid-row: 1 / span 8; align-self: start; }
+  #stage > .screen:has(.resultart) .btn { width: auto; min-width: 220px; }
+}

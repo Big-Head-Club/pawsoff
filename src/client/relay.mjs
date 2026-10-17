@@ -114,14 +114,16 @@ function screenHome() {
     c.append(el("div", "muted", config.share.statLine(challenge)))
     wrap.append(c)
   } else {
-    wrap.append(el("div", "big", R.title.toUpperCase()))
-    wrap.append(el("div", "muted", R.tagline))
+    const t = el("div", "doortitle")
+    t.append(el("div", "big", R.title.toUpperCase()))
+    t.append(el("div", "muted", R.tagline))
+    wrap.append(t)
   }
 
   if (crew) wrap.append(el("div", "label", `crew ${crew} — your group's own puzzle`))
   if (!ctx.isToday) wrap.append(el("div", "label", `from the archive — #${ctx.number} does not score`))
 
-  const play = el("button", "btn", challenge ? "Beat it" : (me && me.playedToday && ctx.isToday ? "See today's result" : "Play"))
+  const play = el("button", "btn play", challenge ? "Beat it" : (me && me.playedToday && ctx.isToday ? "See today's result" : "Play"))
   play.onclick = () => {
     if (me && me.playedToday && ctx.isToday) return screenBoard()
     if (R.practiceGate && !me?.practiced && !localStorage.getItem(SEEN_KEY)) return startRun("gate")
@@ -130,7 +132,7 @@ function screenHome() {
   wrap.append(play)
 
   if (R.practice) {
-    const p = el("button", "btn ghost", "Practice round")
+    const p = el("button", "btn ghost practice", "Practice round")
     p.onclick = () => startRun("practice")
     wrap.append(p)
   }
