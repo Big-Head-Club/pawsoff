@@ -167,5 +167,5 @@ ol.board .v { font-weight: 700; }
 #gad-row { zoom: .78; }
 @media (min-width: 760px) {
   #gad-row { zoom: .58; }
-  #app:has(> #gad-row) #stage { max-height: calc(100dvh - 110px); }
+  #app:has(> #gad-row) #stage { max-height: calc(100svh - 110px); }
 }
